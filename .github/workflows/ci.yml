@@ -51,6 +51,23 @@ jobs:
       - run: cargo test
       # impish holds its own Contract (rule 20).
       - run: cargo run --quiet -- check
+      - name: Contract coverage
+        run: |
+          {
+            echo "## Contract coverage"
+            jq -r '
+              (if .surface then "**Surface covered: \(.surface.percent)%** (\(.surface.covered) of \(.surface.total))\n" else "" end),
+              "**Active obligations: \(.obligations)**\n",
+              "| Primitive | Obligations | Surface |",
+              "|---|---|---|",
+              (.primitives | to_entries[] | "| \(.key) | \(.value.obligations) | \(.value.surface | join(", ")) |"),
+              "",
+              "| Kind | Obligations |",
+              "|---|---|",
+              (.kinds | to_entries[] | "| \(.key) | \(.value) |"),
+              (if (.uncovered // []) | length > 0 then "\n**Not yet in the Contract:** \(.uncovered | join(", "))" else empty end)
+            ' contract/coverage.json
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deny:
     name: Dependency policy
