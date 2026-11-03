@@ -12,7 +12,7 @@ impish's own coverage is published in the summary of every CI run.
 ## Install
 
 ```bash
-cargo install --git https://github.com/Abarbesgaard/impish
+cargo install cargo-impish
 ```
 
 Then run it as `cargo impish`. Contract tests use the `impish` crate's
@@ -20,11 +20,12 @@ attribute, so add it as a dev-dependency:
 
 ```toml
 [dev-dependencies]
-impish = { git = "https://github.com/Abarbesgaard/impish" }
+impish = "0.6"
 ```
 
-Every merge that changes what ships is a release; add `--tag v<version>` to
-install a specific one from the [releases](https://github.com/Abarbesgaard/impish/releases).
+Every merge that changes what ships is a release, published to
+[crates.io](https://crates.io/crates/cargo-impish) and listed under
+[releases](https://github.com/Abarbesgaard/impish/releases).
 
 `cargo impish check` holds the Contract to its tests. `cargo impish mutate
 <primitive>` checks that those tests have teeth: it breaks the code the

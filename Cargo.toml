@@ -2,15 +2,24 @@
 members = ["core", "impish"]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.6.1"
 edition = "2024"
-publish = false
+license = "MIT"
+repository = "https://github.com/Abarbesgaard/impish"
+
+# Published crates need a version on every path dependency. A caret
+# requirement keeps matching as the workspace version moves, until 0.7.
+[workspace.dependencies]
+impish = { path = "impish", version = "0.6.1" }
+impish-core = { path = "core", version = "0.6.1" }
 
 [package]
 name = "cargo-impish"
 version.workspace = true
 edition.workspace = true
-publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
 description = "The Contract gate for Rust, after Impatient Programming"
 
 [[bin]]
@@ -19,7 +28,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.104"
-impish-core = { path = "core" }
+impish-core.workspace = true
 proc-macro2 = { version = "1", features = ["span-locations"] }
 clap = { version = "4.6.7", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -33,6 +42,6 @@ path = "tests/contract/main.rs"
 
 [dev-dependencies]
 archunit = "0.0.2"
-impish = { path = "impish" }
+impish.workspace = true
 serde_json = "1.0.154"
 tempfile = "3.27.0"
