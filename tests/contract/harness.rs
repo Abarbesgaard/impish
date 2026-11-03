@@ -129,7 +129,7 @@ impl Crate {
 
     pub fn test(&self) -> Tested {
         let out = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
-            .args(["test", "--offline", "--test", "fixture"])
+            .args(["test", "--test", "fixture"])
             .current_dir(self.0.path())
             .env(
                 "CARGO_TARGET_DIR",
