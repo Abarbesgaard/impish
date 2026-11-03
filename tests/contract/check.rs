@@ -393,3 +393,96 @@ fn a_failing_surface_command_fails_check() {
     assert!(out.stderr.contains("surface command"), "{}", out.stderr);
     assert!(out.stderr.contains("broken"), "{}", out.stderr);
 }
+
+fn block(id: &str, kind: &str, status: &str) -> String {
+    format!("### {id} — A promise\n- **must:** hold\n- **kind:** {kind}\n- **status:** {status}\n")
+}
+
+/// calc: two active obligations and a retired one, surface `cli add`; sum:
+/// one obligation, surface `cli add` and `mcp find`.
+fn covered() -> Project {
+    let calc = [
+        "## Obligations".to_string(),
+        block("A1", "functional", "active"),
+        block("A2", "security", "active"),
+        block("A3", "ordering", "retired"),
+        "```surface\ncli add\n```\n".to_string(),
+    ];
+    let p = calc_with(&calc.join("\n"), &test_fn("adds", &["calc/A1, calc/A2"]));
+    let sum = format!("{}\n```surface\ncli add\nmcp find\n```\n", readme(&["A1"]));
+    p.write("contract/sum/README.md", &sum)
+        .write("tests/contract/sum.rs", &test_fn("sums", &["sum/A1"]));
+    p
+}
+
+fn calc_with(text: &str, tests: &str) -> Project {
+    let p = calc(&[], tests);
+    p.write("contract/calc/README.md", text);
+    p
+}
+
+fn coverage(p: &Project) -> serde_json::Value {
+    serde_json::from_str(&p.read("contract/coverage.json")).unwrap()
+}
+
+// Contract: check/A17
+#[test]
+fn write_publishes_coverage() {
+    let p = covered();
+    let out = p.run(&["check", "--write"]);
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(
+        coverage(&p),
+        serde_json::json!({
+            "obligations": 3,
+            "kinds": {"functional": 2, "security": 1},
+            "primitives": {
+                "calc": {"obligations": 2, "surface": ["cli add"]},
+                "sum": {"obligations": 1, "surface": ["cli add", "mcp find"]},
+            },
+        })
+    );
+    assert!(p.read("contract/coverage.json").ends_with("}\n"));
+}
+
+// Contract: check/A17
+#[test]
+fn write_publishes_surface_coverage_with_a_surface_command() {
+    let p = covered();
+    p.write(
+        "impish.toml",
+        "[surface]\ncommand = [\"printf\", \"cli add\\\\nmcp find\\\\ncli del\\\\n\"]\n",
+    );
+    let out = p.run(&["check", "--write"]);
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    let coverage = coverage(&p);
+    assert_eq!(
+        coverage["surface"],
+        serde_json::json!({"covered": 2, "total": 3, "percent": 66.7})
+    );
+    assert_eq!(coverage["uncovered"], serde_json::json!(["cli del"]));
+}
+
+// Contract: check/A18
+#[test]
+fn stale_coverage_fails_until_rewritten() {
+    let p = covered();
+    assert_eq!(p.run(&["check", "--write"]).code, Some(0));
+    assert_eq!(p.check().code, Some(0));
+    p.write(
+        "tests/contract/sum.rs",
+        &test_fn("sums", &["sum/A1, sum/A2"]),
+    )
+    .write("contract/sum/README.md", &readme(&["A1", "A2"]));
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    assert_eq!(
+        out.stderr,
+        format!(
+            "contract/coverage.json is out of date; run `cargo impish check --write`\n{NOT_MET}\n"
+        )
+    );
+    assert_eq!(p.run(&["check", "--write"]).code, Some(0));
+    assert_eq!(p.check().code, Some(0));
+    assert_eq!(coverage(&p)["obligations"], 4);
+}

@@ -48,9 +48,21 @@ impl Project {
     }
 
     pub fn check_in(&self, sub: &str) -> Checked {
+        self.run_in(sub, &["check"])
+    }
+
+    pub fn run(&self, args: &[&str]) -> Checked {
+        self.run_in(".", args)
+    }
+
+    pub fn read(&self, rel: &str) -> String {
+        fs::read_to_string(self.0.path().join(rel)).unwrap()
+    }
+
+    fn run_in(&self, sub: &str, args: &[&str]) -> Checked {
         let dir = self.0.path().join(sub);
         fs::create_dir_all(&dir).unwrap();
-        let out = impish_in(&dir, &["check"]);
+        let out = impish_in(&dir, args);
         Checked {
             code: out.status.code(),
             stdout: String::from_utf8(out.stdout).unwrap(),

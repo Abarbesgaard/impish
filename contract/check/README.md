@@ -87,6 +87,17 @@ is 1; when the Contract holds the exit code is 0.
 - **kind:** functional
 - **status:** active
 
+### A17 — --write publishes coverage
+- **must:** with `--write`, write `contract/coverage.json`: the active obligations in total, per kind and per primitive with the primitive's surface lines, and, with a surface command, how many of its lines some primitive covers, of how many, as a percentage, and which it doesn't
+- **why:** Impatient Programming rule 29: the Contract's coverage is published
+- **kind:** persisted-format
+- **status:** active
+
+### A18 — Stale coverage fails
+- **must:** fail, saying to run `cargo impish check --write`, when `contract/coverage.json` exists and isn't what `--write` would write
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/check.rs::run
 src/check.rs::check
@@ -96,6 +107,7 @@ src/contract.rs::covers
 src/contract.rs::tag_lines
 src/contract.rs::surface
 src/check.rs::real_surface
+src/check.rs::coverage
 ```
 
 ```surface

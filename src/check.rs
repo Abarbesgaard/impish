@@ -7,6 +7,7 @@ use std::process::{Command, ExitCode};
 
 use anyhow::{Context, anyhow, bail};
 use serde::Deserialize;
+use serde_json::{Map, Value, json};
 
 use crate::contract::{covers, obligations, surface, tag_lines, tagged_tests};
 
@@ -63,14 +64,59 @@ struct Report {
     primitives: usize,
     obligations: usize,
     problems: Vec<String>,
+    /// The real surface, when `impish.toml` names a command that prints it.
+    real: Option<BTreeSet<String>>,
+    /// Active obligations per kind.
+    kinds: BTreeMap<String, usize>,
+    /// Per primitive: its active obligations and its surface lines.
+    covered: BTreeMap<String, (usize, Vec<String>)>,
 }
 
-pub fn run(cwd: &Path) -> anyhow::Result<ExitCode> {
+/// What `contract/coverage.json` holds.
+fn coverage(report: &Report) -> Value {
+    let primitives: Map<String, Value> = report
+        .covered
+        .iter()
+        .map(|(name, (n, surface))| (name.clone(), json!({"obligations": n, "surface": surface})))
+        .collect();
+    let mut value = json!({
+        "obligations": report.obligations,
+        "kinds": report.kinds,
+        "primitives": primitives,
+    });
+    if let Some(real) = &report.real {
+        let covered: BTreeSet<&String> = report.covered.values().flat_map(|(_, s)| s).collect();
+        let percent = if real.is_empty() {
+            0.0
+        } else {
+            (covered.len() as f64 * 1000.0 / real.len() as f64).round() / 10.0
+        };
+        value["surface"] =
+            json!({"covered": covered.len(), "total": real.len(), "percent": percent});
+        value["uncovered"] = json!(
+            real.iter()
+                .filter(|l| !covered.contains(l))
+                .collect::<Vec<_>>()
+        );
+    }
+    value
+}
+
+pub fn run(cwd: &Path, write: bool) -> anyhow::Result<ExitCode> {
     let root = cwd
         .ancestors()
         .find(|dir| dir.join("contract").is_dir())
         .ok_or_else(|| anyhow!("no contract/ in {} or above it", cwd.display()))?;
-    let report = check(root)?;
+    let mut report = check(root)?;
+    let path = root.join("contract/coverage.json");
+    let text = serde_json::to_string_pretty(&coverage(&report))? + "\n";
+    if write {
+        fs::write(&path, text).context("write contract/coverage.json")?;
+    } else if path.exists() && fs::read_to_string(&path)? != text {
+        report.problems.push(
+            "contract/coverage.json is out of date; run `cargo impish check --write`".to_string(),
+        );
+    }
     if report.problems.is_empty() {
         println!(
             "The Contract holds: {} obligations across {} primitives.",
@@ -102,6 +148,9 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         primitives: names.len(),
         obligations: 0,
         problems: Vec::new(),
+        real: None,
+        kinds: BTreeMap::new(),
+        covered: BTreeMap::new(),
     };
     for name in &names {
         let Ok(readme) = fs::read_to_string(dir.join(name).join("README.md")) else {
@@ -129,9 +178,13 @@ fn check(root: &Path) -> anyhow::Result<Report> {
                 }
             });
         }
+        let mut lines = Vec::new();
         for line in surface(&readme) {
             report.problems.push(match line {
-                Ok(line) if real.as_ref().is_none_or(|real| real.contains(line)) => continue,
+                Ok(line) if real.as_ref().is_none_or(|real| real.contains(line)) => {
+                    lines.push(line.to_string());
+                    continue;
+                }
                 Ok(line) => {
                     format!(
                         "{readme_file}: surface `{line}` is not in the surface command's output"
@@ -147,7 +200,12 @@ fn check(root: &Path) -> anyhow::Result<Report> {
                 continue;
             }
         };
-        report.obligations += ids.values().filter(|o| !o.retired).count();
+        let active: Vec<_> = ids.values().filter(|o| !o.retired).collect();
+        for o in &active {
+            *report.kinds.entry(o.kind.clone()).or_default() += 1;
+        }
+        report.obligations += active.len();
+        report.covered.insert(name.clone(), (active.len(), lines));
         let mut proved = BTreeSet::new();
         let mut ignored: BTreeMap<u32, Vec<String>> = BTreeMap::new();
         for test in tagged_tests(&tests) {
@@ -191,6 +249,7 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         }
     }
     report.problems.extend(stray_tags(root, &names));
+    report.real = real;
     Ok(report)
 }
 

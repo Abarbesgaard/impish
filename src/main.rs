@@ -16,7 +16,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Hold the Contract under contract/ to its tests.
-    Check,
+    Check {
+        /// Write contract/coverage.json, the Contract's published coverage.
+        #[arg(long)]
+        write: bool,
+    },
 }
 
 fn main() -> anyhow::Result<ExitCode> {
@@ -26,6 +30,6 @@ fn main() -> anyhow::Result<ExitCode> {
         args.remove(1);
     }
     match Cli::parse_from(args).command {
-        Command::Check => check::run(&std::env::current_dir()?),
+        Command::Check { write } => check::run(&std::env::current_dir()?, write),
     }
 }
