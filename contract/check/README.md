@@ -18,7 +18,7 @@ is 1; when the Contract holds the exit code is 0.
 - **status:** active
 
 ### A3 — An untagged test fails
-- **must:** fail, naming each test that names no obligation
+- **must:** fail, naming each test that names no obligation: a `#[test]` in a primitive's test file, where `#[impish::contract(…)]` belongs
 - **kind:** functional
 - **status:** active
 
@@ -58,7 +58,7 @@ is 1; when the Contract holds the exit code is 0.
 - **status:** active
 
 ### A11 — Tags stay in contract tests
-- **must:** fail, naming the file and line, on a `// Contract:` tag in `src/` or `tests/` outside a primitive's test file
+- **must:** fail, naming the file and line, on an `#[impish::contract(…)]` attribute in `src/` or `tests/` outside a primitive's test file
 - **kind:** functional
 - **status:** active
 
@@ -98,13 +98,18 @@ is 1; when the Contract holds the exit code is 0.
 - **kind:** functional
 - **status:** active
 
+### A19 — Test files are Rust
+- **must:** fail, naming the file and line, when a primitive's test file isn't valid Rust
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/check.rs::run
 src/check.rs::check
 src/contract.rs::obligations
 src/contract.rs::tagged_tests
 src/contract.rs::covers
-src/contract.rs::tag_lines
+src/contract.rs::contract_attributes
 src/contract.rs::surface
 src/check.rs::real_surface
 src/check.rs::coverage

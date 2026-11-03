@@ -1,7 +1,6 @@
 use crate::harness::impish;
 
-// Contract: cli/A1
-#[test]
+#[impish::contract("cli/A1")]
 fn the_cargo_form_and_the_direct_form_agree() {
     let cargo = impish(&["impish", "--version"]);
     let direct = impish(&["--version"]);
@@ -10,8 +9,7 @@ fn the_cargo_form_and_the_direct_form_agree() {
     assert_eq!(cargo.stdout, direct.stdout);
 }
 
-// Contract: cli/A2
-#[test]
+#[impish::contract("cli/A2")]
 fn version_names_the_tool_and_its_version() {
     let out = impish(&["--version"]);
     assert!(out.status.success());

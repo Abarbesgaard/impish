@@ -1,7 +1,6 @@
 use crate::harness::Crate;
 
-// Contract: attribute/A1
-#[test]
+#[impish::contract("attribute/A1")]
 fn a_marked_function_runs_as_a_test() {
     let out = Crate::with_tests(
         r#"
@@ -21,8 +20,7 @@ fn proves() {
     assert!(out.text().contains("1 failed"), "{}", out.text());
 }
 
-// Contract: attribute/A2
-#[test]
+#[impish::contract("attribute/A2")]
 fn naming_no_obligation_fails_to_compile() {
     let out = Crate::with_tests(
         r#"

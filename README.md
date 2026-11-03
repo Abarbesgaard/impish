@@ -15,7 +15,13 @@ impish's own coverage is published in the summary of every CI run.
 cargo install --git https://github.com/Abarbesgaard/impish
 ```
 
-Then run it as `cargo impish`.
+Then run it as `cargo impish`. Contract tests use the `impish` crate's
+attribute, so add it as a dev-dependency:
+
+```toml
+[dev-dependencies]
+impish = { git = "https://github.com/Abarbesgaard/impish" }
+```
 
 Every merge that changes what ships is a release; add `--tag v<version>` to
 install a specific one from the [releases](https://github.com/Abarbesgaard/impish/releases).

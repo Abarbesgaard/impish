@@ -9,17 +9,17 @@ fn calc(ids: &[&str], tests: &str) -> Project {
     p
 }
 
-// Contract: check/A1
-#[test]
+#[impish::contract("check/A1")]
 fn a_held_contract_passes_and_says_what_it_checked() {
     let tests = test_fn("adds", &["calc/A1, calc/A2"]) + &test_fn("subtracts", &["calc/A3"]);
     let p = calc(&["A1", "A2", "A3"], &tests);
     let sum = [
-        "// Contract: sum/A1",
-        "/// Sums.",
-        "#[cfg(unix)]",
-        "#[test]",
-        "fn sums() {}",
+        "mod nested {",
+        "    #[impish::contract(\"sum/A1\")]",
+        "    /// Sums.",
+        "    #[cfg(unix)]",
+        "    fn sums() {}",
+        "}",
     ];
     p.write("contract/README.md", "# The Contract\n")
         .write(
@@ -35,28 +35,32 @@ fn a_held_contract_passes_and_says_what_it_checked() {
     );
 }
 
-// Contract: check/A2
-#[test]
+#[impish::contract("check/A2")]
 fn an_unproved_obligation_fails_by_name() {
     let out = calc(&["A1", "A2"], &test_fn("adds", &["calc/A1"])).check();
     assert_eq!(out.code, Some(1));
     assert_eq!(out.stderr, format!("calc/A2 has no test\n{NOT_MET}\n"));
 }
 
-// Contract: check/A3
-#[test]
+#[impish::contract("check/A3")]
 fn an_untagged_test_fails_by_name() {
-    let tests = test_fn("adds", &["calc/A1"]) + &test_fn("subtracts", &[]);
+    let tests = test_fn("adds", &["calc/A1"])
+        + &test_fn("subtracts", &[])
+        + "// Contract: calc/A1\n#[test]\nfn divides() {}\n"
+        + "#[allow(dead_code)]\nfn helper() {}\n";
     let out = calc(&["A1"], &tests).check();
     assert_eq!(out.code, Some(1));
     assert_eq!(
         out.stderr,
-        format!("calc::subtracts names no obligation\n{NOT_MET}\n")
+        format!(
+            "calc::subtracts names no obligation\n\
+             calc::divides names no obligation\n\
+             {NOT_MET}\n"
+        )
     );
 }
 
-// Contract: check/A4
-#[test]
+#[impish::contract("check/A4")]
 fn a_tag_the_primitive_doesnt_declare_fails_by_name() {
     let tests = test_fn("adds", &["calc/A1", "calc/A9, sum/A1", "calc/one"]);
     let out = calc(&["A1"], &tests).check();
@@ -67,8 +71,7 @@ fn a_tag_the_primitive_doesnt_declare_fails_by_name() {
     }
 }
 
-// Contract: check/A5, check/A14, check/A16
-#[test]
+#[impish::contract("check/A5", "check/A14", "check/A16")]
 fn a_malformed_obligation_list_fails_with_file_and_line() {
     let text = [
         "# calc",
@@ -126,8 +129,7 @@ fn a_malformed_obligation_list_fails_with_file_and_line() {
     assert_eq!(out.stderr, expected.join("\n") + "\n");
 }
 
-// Contract: check/A5
-#[test]
+#[impish::contract("check/A5")]
 fn a_readme_without_obligations_fails() {
     for text in ["# calc\n", "# calc\n\n## Obligations\n\n## Notes\n"] {
         let p = calc(&[], &test_fn("adds", &["calc/A1"]));
@@ -142,8 +144,7 @@ fn a_readme_without_obligations_fails() {
     }
 }
 
-// Contract: check/A15
-#[test]
+#[impish::contract("check/A15")]
 fn retired_obligations_need_no_test_and_take_no_tags() {
     let text = [
         "## Obligations",
@@ -177,8 +178,7 @@ fn retired_obligations_need_no_test_and_take_no_tags() {
     );
 }
 
-// Contract: check/A6
-#[test]
+#[impish::contract("check/A6")]
 fn a_primitive_missing_a_file_fails_naming_it() {
     let p = Project::new();
     p.write("contract/calc/README.md", &readme(&["A1"]))
@@ -194,24 +194,21 @@ fn a_primitive_missing_a_file_fails_naming_it() {
     );
 }
 
-// Contract: check/A7
-#[test]
+#[impish::contract("check/A7")]
 fn check_finds_the_contract_above_the_current_directory() {
     let p = calc(&["A1"], &test_fn("adds", &["calc/A1"]));
     let out = p.check_in("tests/contract");
     assert_eq!(out.code, Some(0), "{}", out.stderr);
 }
 
-// Contract: check/A7
-#[test]
+#[impish::contract("check/A7")]
 fn check_without_a_contract_fails() {
     let out = Project::new().check();
     assert_eq!(out.code, Some(1));
     assert!(out.stderr.contains("no contract/"), "{}", out.stderr);
 }
 
-// Contract: check/A8
-#[test]
+#[impish::contract("check/A8")]
 fn every_problem_is_reported() {
     let p = calc(
         &["A1", "A2"],
@@ -244,15 +241,13 @@ fn with_covers(lines: &str) -> Project {
     p
 }
 
-// Contract: check/A9
-#[test]
+#[impish::contract("check/A9")]
 fn covers_naming_defined_functions_hold() {
     let out = with_covers("src/calc.rs::add\n\nsrc/calc.rs::parse\n").check();
     assert_eq!(out.code, Some(0), "{}", out.stderr);
 }
 
-// Contract: check/A9
-#[test]
+#[impish::contract("check/A9")]
 fn covers_naming_missing_functions_fail() {
     let out =
         with_covers("src/calc.rs::sub\nsrc/calc.rs::add_\nsrc/gone.rs::add\nsrc/calc.rs\n").check();
@@ -270,22 +265,18 @@ fn covers_naming_missing_functions_fail() {
     );
 }
 
-// Contract: check/A10
-#[test]
+#[impish::contract("check/A10")]
 fn ignored_tests_prove_nothing() {
     let tests = [
-        "// Contract: calc/A1",
-        "#[test]",
+        "#[impish::contract(\"calc/A1\")]",
         "#[ignore]",
         "fn adds() {}",
         "",
         "#[ignore = \"slow\"]",
-        "// Contract: calc/A1, calc/A2",
-        "#[test]",
+        "#[impish::contract(\"calc/A1\", \"calc/A2\")]",
         "fn subtracts() {}",
         "",
-        "// Contract: calc/A3",
-        "#[test]",
+        "#[impish::contract(\"calc/A3\")]",
         "fn multiplies() {}",
     ];
     let out = calc(&["A1", "A2", "A3"], &tests.join("\n")).check();
@@ -300,24 +291,35 @@ fn ignored_tests_prove_nothing() {
     );
 }
 
-// Contract: check/A11
-#[test]
+#[impish::contract("check/A11")]
 fn a_tag_outside_a_primitive_test_file_fails() {
     let p = calc(&["A1"], &test_fn("adds", &["calc/A1"]));
+    let attr = "#[impish::contract(\"calc/A1\")]";
+    let lib = [
+        "// Contract: calc/A1",
+        "mod m {",
+        &format!("    {attr}"),
+        "    fn f() {}",
+        &format!("    const S: &str = {attr:?};"),
+        "    #[derive(Debug)]",
+        "    struct T;",
+        "}",
+    ];
     p.write(
         "tests/contract/main.rs",
-        "mod calc;\n// Contract: calc/A1\n",
+        &format!("mod calc;\n{attr}\nfn f() {{}}\n"),
     )
     .write("tests/unit/calc.rs", &test_fn("unit", &["calc/A1"]))
-    .write("src/lib.rs", "fn f() {\n    // Contract: calc/A1\n}\n")
-    .write("src/notes.txt", "// Contract: calc/A1\n");
+    .write("src/lib.rs", &lib.join("\n"))
+    .write("src/broken.rs", &format!("{attr}\nfn ("))
+    .write("src/notes.txt", &format!("{attr}\nfn f() {{}}\n"));
     let out = p.check();
     assert_eq!(out.code, Some(1));
-    let outside = "a Contract tag outside tests/contract/<primitive>.rs";
+    let outside = "an #[impish::contract] attribute outside tests/contract/<primitive>.rs";
     assert_eq!(
         out.stderr,
         format!(
-            "src/lib.rs:2: {outside}\n\
+            "src/lib.rs:3: {outside}\n\
              tests/contract/main.rs:2: {outside}\n\
              tests/unit/calc.rs:1: {outside}\n\
              {NOT_MET}\n"
@@ -335,8 +337,7 @@ fn with_surface(lines: &str) -> Project {
 const LISTS_ADD_AND_FIND: &str =
     "[surface]\ncommand = [\"sh\", \"-c\", \"printf 'cli add\\\\n\\\\n  mcp find  \\\\n'\"]\n";
 
-// Contract: check/A12
-#[test]
+#[impish::contract("check/A12")]
 fn surface_lines_must_be_kind_and_name() {
     let out = with_surface("cli add\n\nmcp find\n").check();
     assert_eq!(out.code, Some(0), "{}", out.stderr);
@@ -353,8 +354,7 @@ fn surface_lines_must_be_kind_and_name() {
     );
 }
 
-// Contract: check/A13
-#[test]
+#[impish::contract("check/A13")]
 fn surface_lines_the_command_prints_hold() {
     let p = with_surface("cli add\nmcp find\n");
     p.write("impish.toml", LISTS_ADD_AND_FIND);
@@ -362,8 +362,7 @@ fn surface_lines_the_command_prints_hold() {
     assert_eq!(out.code, Some(0), "{}", out.stderr);
 }
 
-// Contract: check/A13
-#[test]
+#[impish::contract("check/A13")]
 fn a_surface_line_the_command_doesnt_print_fails() {
     let p = with_surface("cli add\nmcp add\ncli nope\n");
     p.write("impish.toml", LISTS_ADD_AND_FIND);
@@ -380,8 +379,7 @@ fn a_surface_line_the_command_doesnt_print_fails() {
     );
 }
 
-// Contract: check/A13
-#[test]
+#[impish::contract("check/A13")]
 fn a_failing_surface_command_fails_check() {
     let p = with_surface("cli add\n");
     p.write(
@@ -425,8 +423,7 @@ fn coverage(p: &Project) -> serde_json::Value {
     serde_json::from_str(&p.read("contract/coverage.json")).unwrap()
 }
 
-// Contract: check/A17
-#[test]
+#[impish::contract("check/A17")]
 fn write_publishes_coverage() {
     let p = covered();
     let out = p.run(&["check", "--write"]);
@@ -445,8 +442,7 @@ fn write_publishes_coverage() {
     assert!(p.read("contract/coverage.json").ends_with("}\n"));
 }
 
-// Contract: check/A17
-#[test]
+#[impish::contract("check/A17")]
 fn write_publishes_surface_coverage_with_a_surface_command() {
     let p = covered();
     p.write(
@@ -463,8 +459,7 @@ fn write_publishes_surface_coverage_with_a_surface_command() {
     assert_eq!(coverage["uncovered"], serde_json::json!(["cli del"]));
 }
 
-// Contract: check/A18
-#[test]
+#[impish::contract("check/A18")]
 fn stale_coverage_fails_until_rewritten() {
     let p = covered();
     assert_eq!(p.run(&["check", "--write"]).code, Some(0));
@@ -485,4 +480,19 @@ fn stale_coverage_fails_until_rewritten() {
     assert_eq!(p.run(&["check", "--write"]).code, Some(0));
     assert_eq!(p.check().code, Some(0));
     assert_eq!(coverage(&p)["obligations"], 4);
+}
+
+#[impish::contract("check/A19")]
+fn a_test_file_that_isnt_rust_fails() {
+    let p = calc(&["A1"], "\n#[impish::contract(\"calc/A1\")]\nfn adds( {}\n");
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    let lines: Vec<&str> = out.stderr.lines().collect();
+    assert_eq!(lines.len(), 2, "{}", out.stderr);
+    assert!(
+        lines[0].starts_with("tests/contract/calc.rs:3: isn't valid Rust: "),
+        "{}",
+        out.stderr
+    );
+    assert_eq!(lines[1], NOT_MET);
 }

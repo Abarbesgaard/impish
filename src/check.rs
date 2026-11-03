@@ -9,7 +9,7 @@ use anyhow::{Context, anyhow, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::contract::{covers, obligations, surface, tag_lines, tagged_tests};
+use crate::contract::{contract_attributes, covers, obligations, surface, tagged_tests};
 
 /// `impish.toml`, at the project root; every key is optional.
 #[derive(Default, Deserialize)]
@@ -206,9 +206,19 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         }
         report.obligations += active.len();
         report.covered.insert(name.clone(), (active.len(), lines));
+        let tagged = match tagged_tests(&tests) {
+            Ok(tagged) => tagged,
+            Err(e) => {
+                let line = e.span().start().line;
+                report
+                    .problems
+                    .push(format!("{tests_file}:{line}: isn't valid Rust: {e}"));
+                continue;
+            }
+        };
         let mut proved = BTreeSet::new();
         let mut ignored: BTreeMap<u32, Vec<String>> = BTreeMap::new();
-        for test in tagged_tests(&tests) {
+        for test in tagged {
             if test.tags.is_empty() {
                 report
                     .problems
@@ -273,9 +283,9 @@ fn stray_tags(root: &Path, names: &[String]) -> Vec<String> {
     for file in files.iter().filter(|file| !homes.contains(file)) {
         let src = fs::read_to_string(file).unwrap_or_default();
         let rel = file.strip_prefix(root).unwrap_or(file).display();
-        for n in tag_lines(&src) {
+        for n in contract_attributes(&src) {
             problems.push(format!(
-                "{rel}:{n}: a Contract tag outside tests/contract/<primitive>.rs"
+                "{rel}:{n}: an #[impish::contract] attribute outside tests/contract/<primitive>.rs"
             ));
         }
     }
