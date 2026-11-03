@@ -16,3 +16,6 @@ cargo install --git https://github.com/Abarbesgaard/impish
 ```
 
 Then run it as `cargo impish`.
+
+Every merge that changes what ships is a release; add `--tag v<version>` to
+install a specific one from the [releases](https://github.com/Abarbesgaard/impish/releases).
