@@ -7,7 +7,7 @@ A sibling of [flinch](https://github.com/tools4imps/flinch) (Go) and
 A Contract is what a crate promises: numbered obligations, each proved by a
 tagged contract test. impish fails the build when the Contract stops being true.
 
-impish's own coverage is published at https://abarbesgaard.github.io/impish/.
+impish's own coverage is published in the summary of every CI run.
 
 ## Install
 
