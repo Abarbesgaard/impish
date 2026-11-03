@@ -69,7 +69,9 @@ pub fn test_fn(name: &str, tags: &[&str]) -> String {
 pub fn readme(ids: &[&str]) -> String {
     let lines: String = ids
         .iter()
-        .map(|id| format!("- **{id}** A promise.\n"))
+        .map(|id| {
+            format!("### {id} — A promise\n- **must:** hold\n- **kind:** functional\n- **status:** active\n\n")
+        })
         .collect();
     format!("# A primitive\n\n## Obligations\n\n{lines}")
 }

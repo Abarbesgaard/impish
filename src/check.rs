@@ -142,12 +142,12 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         }
         let ids = match obligations(&readme, &readme_file) {
             Ok(ids) => ids,
-            Err(problem) => {
-                report.problems.push(problem);
+            Err(problems) => {
+                report.problems.extend(problems);
                 continue;
             }
         };
-        report.obligations += ids.len();
+        report.obligations += ids.values().filter(|o| !o.retired).count();
         let mut proved = BTreeSet::new();
         let mut ignored: BTreeMap<u32, Vec<String>> = BTreeMap::new();
         for test in tagged_tests(&tests) {
@@ -161,7 +161,13 @@ fn check(root: &Path) -> anyhow::Result<Report> {
                     .strip_prefix(&format!("{name}/A"))
                     .and_then(|n| n.parse().ok())
                 {
-                    Some(id) if ids.contains(&id) => {
+                    Some(id) if ids.get(&id).is_some_and(|o| o.retired) => {
+                        report.problems.push(format!(
+                            "{name}::{} names `{tag}`, which is retired",
+                            test.name
+                        ));
+                    }
+                    Some(id) if ids.contains_key(&id) => {
                         if test.ignored {
                             let tests = ignored.entry(id).or_default();
                             tests.push(format!("{name}::{}", test.name));
@@ -176,7 +182,8 @@ fn check(root: &Path) -> anyhow::Result<Report> {
                 }
             }
         }
-        for id in ids.difference(&proved) {
+        let active = ids.iter().filter(|(_, o)| !o.retired).map(|(id, _)| id);
+        for id in active.filter(|id| !proved.contains(*id)) {
             report.problems.push(match ignored.get(id) {
                 Some(tests) => format!("{name}/A{id} has no test (ignored: {})", tests.join(", ")),
                 None => format!("{name}/A{id} has no test"),
