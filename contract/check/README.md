@@ -15,10 +15,15 @@ is 1; when the Contract holds the exit code is 0.
 - **A6** A primitive missing its README or its test file fails, naming what's missing.
 - **A7** `check` uses the nearest directory, from the current one up, that has `contract/`; with none, it fails.
 - **A8** Every problem is reported, not only the first.
+- **A9** Every `<file>::<function>` in a README's ```` ```covers ```` block must be a function defined in that file; a missing one, or a line not in that form, fails, naming it.
+- **A10** A test marked `#[ignore]` proves nothing: an obligation only ignored tests name fails, naming them.
+- **A11** A `// Contract:` tag in `src/` or `tests/` outside a primitive's test file fails, naming the file and line.
 
 ```covers
 src/check.rs::run
 src/check.rs::check
 src/contract.rs::obligations
 src/contract.rs::tagged_tests
+src/contract.rs::covers
+src/contract.rs::tag_lines
 ```

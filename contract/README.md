@@ -23,6 +23,18 @@ proves in a comment above it:
 fn ...
 ```
 
+A test marked `#[ignore]` proves nothing. Tags belong only in
+`tests/contract/<primitive>.rs`.
+
+A README may list the code its obligations are about in a covers block of
+`<file>::<function>` lines; each must exist:
+
+````markdown
+```covers
+src/check.rs::run
+```
+````
+
 Contract tests are black-box: they run the `cargo-impish` binary.
 
 `cargo impish check` holds the Contract to its tests; see `contract/check/`.

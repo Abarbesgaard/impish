@@ -148,3 +148,94 @@ fn every_problem_is_reported() {
         )
     );
 }
+
+fn with_covers(lines: &str) -> Project {
+    let p = calc(&[], &test_fn("adds", &["calc/A1"]));
+    let covers = format!("{}\n```covers\n{lines}```\n", readme(&["A1"]));
+    p.write("contract/calc/README.md", &covers).write(
+        "src/calc.rs",
+        "pub fn add(a: u8) -> u8 { a }\npub fn add_one() {}\npub fn parse<T>() {}\n",
+    );
+    p
+}
+
+// Contract: check/A9
+#[test]
+fn covers_naming_defined_functions_hold() {
+    let out = with_covers("src/calc.rs::add\n\nsrc/calc.rs::parse\n").check();
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+}
+
+// Contract: check/A9
+#[test]
+fn covers_naming_missing_functions_fail() {
+    let out =
+        with_covers("src/calc.rs::sub\nsrc/calc.rs::add_\nsrc/gone.rs::add\nsrc/calc.rs\n").check();
+    assert_eq!(out.code, Some(1));
+    let file = "contract/calc/README.md";
+    assert_eq!(
+        out.stderr,
+        format!(
+            "{file}: covers `src/calc.rs::sub`, which doesn't exist\n\
+             {file}: covers `src/calc.rs::add_`, which doesn't exist\n\
+             {file}: covers `src/gone.rs::add`, which doesn't exist\n\
+             {file}: covers line `src/calc.rs` is not <file>::<function>\n\
+             {NOT_MET}\n"
+        )
+    );
+}
+
+// Contract: check/A10
+#[test]
+fn ignored_tests_prove_nothing() {
+    let tests = [
+        "// Contract: calc/A1",
+        "#[test]",
+        "#[ignore]",
+        "fn adds() {}",
+        "",
+        "#[ignore = \"slow\"]",
+        "// Contract: calc/A1, calc/A2",
+        "#[test]",
+        "fn subtracts() {}",
+        "",
+        "// Contract: calc/A3",
+        "#[test]",
+        "fn multiplies() {}",
+    ];
+    let out = calc(&["A1", "A2", "A3"], &tests.join("\n")).check();
+    assert_eq!(out.code, Some(1));
+    assert_eq!(
+        out.stderr,
+        format!(
+            "calc/A1 has no test (ignored: calc::adds, calc::subtracts)\n\
+             calc/A2 has no test (ignored: calc::subtracts)\n\
+             {NOT_MET}\n"
+        )
+    );
+}
+
+// Contract: check/A11
+#[test]
+fn a_tag_outside_a_primitive_test_file_fails() {
+    let p = calc(&["A1"], &test_fn("adds", &["calc/A1"]));
+    p.write(
+        "tests/contract/main.rs",
+        "mod calc;\n// Contract: calc/A1\n",
+    )
+    .write("tests/unit/calc.rs", &test_fn("unit", &["calc/A1"]))
+    .write("src/lib.rs", "fn f() {\n    // Contract: calc/A1\n}\n")
+    .write("src/notes.txt", "// Contract: calc/A1\n");
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    let outside = "a Contract tag outside tests/contract/<primitive>.rs";
+    assert_eq!(
+        out.stderr,
+        format!(
+            "src/lib.rs:2: {outside}\n\
+             tests/contract/main.rs:2: {outside}\n\
+             tests/unit/calc.rs:1: {outside}\n\
+             {NOT_MET}\n"
+        )
+    );
+}
