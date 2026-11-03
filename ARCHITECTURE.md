@@ -1,0 +1,80 @@
+# Architecture
+
+impish is a Cargo workspace of three crates. This page, the decision records in
+[docs/decisions](docs/decisions/) and the [Contract](contract/) are enough to
+regenerate it (Impatient Programming, rule 17): the Contract says what impish
+promises, the records say why it is built this way, and this page says where
+each part lives.
+
+## Crates
+
+```
+core/      impish-core   the Contract's README format: obligations, kinds, statuses
+impish/    impish        #[impish::contract]: the attribute users' contract tests carry
+src/       cargo-impish  the `cargo impish` binary: check and mutate
+```
+
+Dependencies point inwards: `cargo-impish` and `impish` both depend on
+`impish-core`, never on each other, and `impish-core` depends on nothing but
+`std`. ([0004](docs/decisions/0004-impish-core-is-the-shared-format.md))
+
+## cargo-impish
+
+```
+src/
+  main.rs       parses the command line (clap) and finds the nearest contract/
+  check.rs      `cargo impish check`: holds the Contract to its tests, writes coverage
+  mutate.rs     `cargo impish mutate`: a kill matrix per obligation, via cargo-mutants
+  contract.rs   reads covers and surface blocks, and #[impish::contract] tags with syn
+```
+
+`main` calls the commands; `check` and `mutate` both build on `contract`, never
+on each other; `contract` does no I/O. Only the commands read or write files,
+run processes or print, and only `check` reads `impish.toml`.
+
+`check` is static: it reads READMEs and parses test files, and never builds or
+runs a test. `cargo test` runs them, and the attribute ties the two together.
+([0003](docs/decisions/0003-check-is-static.md))
+
+## impish (the attribute)
+
+A proc-macro crate with one export, `#[impish::contract("<primitive>/A<n>", …)]`.
+It takes the place of `#[test]` and checks each tag against
+`contract/<primitive>/README.md` while the test compiles, so a wrong tag is a
+compile error on that tag. It reports through `compile_error!`, never by
+printing or panicking. ([0002](docs/decisions/0002-tags-are-an-attribute-checked-at-compile-time.md))
+
+## The Contract
+
+impish holds its own Contract, in the layout it checks in other crates:
+
+```
+contract/README.md               the format
+contract/<primitive>/README.md   purpose, obligations, covers and surface blocks
+contract/coverage.json           published coverage, rewritten by `check --write`
+tests/contract/<primitive>.rs    the tests that prove the obligations
+```
+
+([0001](docs/decisions/0001-the-contract-is-markdown-blocks.md),
+[0005](docs/decisions/0005-coverage-is-a-committed-file.md))
+
+## Guardrails
+
+Every rule here is checked by a machine (rule 19). Most fire on every PR
+(rule 24); the `CI` job in `.github/workflows/ci.yml` gates them, and green
+merges itself (rule 27).
+
+| What | Where |
+|---|---|
+| Format, Clippy | CI `lint` |
+| Tests, then `cargo impish check` on impish itself | CI `test` |
+| Architecture: the dependency directions and boundaries above, file size | `tests/architecture.rs` ([0008](docs/decisions/0008-architecture-rules-are-tests-not-obligations.md)) |
+| Dependency licences, sources and advisories | CI `deny`, `deny.toml`; nightly `audit.yml` |
+| Workflow security | CI `zizmor` |
+| Every changed line is mutated, and a survivor fails | CI `mutants` |
+| No new near-duplicate functions | CI `similar`, `scripts/similar-code.sh` |
+| A change to what ships bumps the version | CI `version` ([0006](docs/decisions/0006-every-green-merge-is-a-release.md)) |
+| PR titles are `fix:` (with `bug`) or `refine:` (rule 9) | `pr-title.yml` |
+| Tests that catch nothing another test doesn't | nightly `kill-matrix.yml`, `scripts/kill-matrix.sh` ([0007](docs/decisions/0007-tests-earn-their-place-at-three-grains.md)) |
+
+On `main`, the `Release` job publishes every new version.

@@ -496,3 +496,39 @@ fn a_test_file_that_isnt_rust_fails() {
     );
     assert_eq!(lines[1], NOT_MET);
 }
+
+#[impish::contract("check/A20")]
+fn covers_outside_the_crate_fail() {
+    let p = with_covers("src/calc.rs::add\n");
+    let absolute = format!("{}::add", p.path().join("src/calc.rs").display());
+    let lines = ["src/../src/calc.rs::add", &absolute, "../calc.rs::add"];
+    p.write(
+        "contract/calc/README.md",
+        &format!(
+            "{}\n```covers\n{}\nsrc/calc.rs::add\n```\n",
+            readme(&["A1"]),
+            lines.join("\n")
+        ),
+    );
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    let file = "contract/calc/README.md";
+    let expected: String = lines
+        .iter()
+        .map(|l| format!("{file}: covers `{l}`, which is outside the crate\n"))
+        .collect();
+    assert_eq!(out.stderr, format!("{expected}{NOT_MET}\n"));
+}
+
+#[impish::contract("check/A21")]
+fn check_leaves_the_crate_as_it_was() {
+    let p = covered();
+    let before = p.files();
+    assert_eq!(p.check().code, Some(0));
+    assert_eq!(p.files(), before, "check wrote coverage without --write");
+    assert_eq!(p.run(&["check", "--write"]).code, Some(0));
+    p.write("contract/sum/README.md", &readme(&["A1", "A2"]));
+    let before = p.files();
+    assert_eq!(p.check().code, Some(1));
+    assert_eq!(p.files(), before, "a failing check changed the crate");
+}

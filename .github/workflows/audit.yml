@@ -1,0 +1,29 @@
+name: Security audit
+
+# Flags dependencies with known RustSec advisories once a day, to catch
+# advisories published against versions impish already depends on. PRs and
+# pushes are audited by the Dependency policy job (cargo-deny) in ci.yml.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  audit:
+    name: RustSec audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      checks: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ github.token }}

@@ -2,7 +2,7 @@
 members = ["core", "impish"]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 publish = false
 
@@ -32,6 +32,7 @@ name = "contract"
 path = "tests/contract/main.rs"
 
 [dev-dependencies]
+archunit = "0.0.2"
 impish = { path = "impish" }
 serde_json = "1.0.154"
 tempfile = "3.27.0"

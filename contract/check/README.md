@@ -103,6 +103,18 @@ is 1; when the Contract holds the exit code is 0.
 - **kind:** functional
 - **status:** active
 
+### A20 — Covers stay inside the crate
+- **must:** fail, without reading the file, on a covers line whose file is absolute or has a `..` component
+- **why:** a README is input, and `check` runs in CI with the repository's permissions
+- **kind:** security
+- **status:** active
+
+### A21 — check only reads
+- **must:** leave every file in the crate as it was, whether the Contract holds or not, unless `--write` is given
+- **why:** a gate that edits the tree it checks can hide what it found
+- **kind:** non-functional
+- **status:** active
+
 ```covers
 src/check.rs::run
 src/check.rs::check
