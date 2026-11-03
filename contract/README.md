@@ -24,3 +24,5 @@ fn ...
 ```
 
 Contract tests are black-box: they run the `cargo-impish` binary.
+
+`cargo impish check` holds the Contract to its tests; see `contract/check/`.

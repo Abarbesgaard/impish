@@ -1,11 +1,4 @@
-use std::process::{Command, Output};
-
-fn impish(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_cargo-impish"))
-        .args(args)
-        .output()
-        .expect("run cargo-impish")
-}
+use crate::harness::impish;
 
 // Contract: cli/A1
 #[test]
