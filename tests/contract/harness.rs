@@ -164,6 +164,7 @@ impl Crate {
 
 /// A throwaway crate with a `calc` primitive, for `cargo impish mutate`:
 /// `src/lib.rs` defines `add` and `double`, which the README covers, and
+/// `negate`, which it doesn't, and
 /// `tests/contract/calc.rs` holds `tests`. Builds share a target directory.
 pub fn calc_crate(tests: &str) -> Project {
     let p = Project::new();
@@ -185,7 +186,8 @@ pub fn calc_crate(tests: &str) -> Project {
         .write(
             "src/lib.rs",
             "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n\
-             pub fn double(a: i32) -> i32 {\n    a * 2\n}\n",
+             pub fn double(a: i32) -> i32 {\n    a * 2\n}\n\n\
+             pub fn negate(a: i32) -> i32 {\n    -a\n}\n",
         )
         .write("contract/calc/README.md", &readme)
         .write("tests/contract/main.rs", "mod calc;\n")

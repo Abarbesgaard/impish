@@ -44,7 +44,7 @@ struct Position {
 }
 
 enum Outcome {
-    /// Caught; the obligations tagged on the tests that failed.
+    /// Caught; the active obligations tagged on the tests that failed.
     Killed(BTreeSet<String>),
     Survived,
     /// The mutant doesn't build, so it proves nothing.
@@ -111,7 +111,6 @@ pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
     for mutant in &mutants {
         let outcome = scratch.try_mutant(mutant, primitive, timeout, &tags, &active)?;
         let verdict = match &outcome {
-            Outcome::Killed(by) if by.is_empty() => "killed".to_string(),
             Outcome::Killed(by) => {
                 format!(
                     "killed by {}",
@@ -331,15 +330,21 @@ impl Scratch {
             None => Outcome::Unviable,
             Some(exe) => match self.test(&exe, primitive, Some(timeout))? {
                 None => Outcome::TimedOut,
-                Some(failed) if failed.is_empty() => Outcome::Survived,
-                Some(failed) => Outcome::Killed(
-                    failed
+                Some(failed) => {
+                    let by: BTreeSet<String> = failed
                         .iter()
                         .flat_map(|test| tags.get(test).into_iter().flatten())
                         .filter(|tag| active.contains(tag))
                         .cloned()
-                        .collect(),
-                ),
+                        .collect();
+                    // Caught only by tests that name no active obligation,
+                    // the Contract still lets the mutant through.
+                    if by.is_empty() {
+                        Outcome::Survived
+                    } else {
+                        Outcome::Killed(by)
+                    }
+                }
             },
         };
         fs::write(&path, original)?;
