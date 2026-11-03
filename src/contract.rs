@@ -27,9 +27,41 @@ pub fn obligations(readme: &str, file: &str) -> Result<BTreeSet<u32>, String> {
     Ok(ids)
 }
 
+/// The `(file, function)` pairs in a README's covers block, or the line that
+/// isn't `<file>::<function>`. A README without the block covers nothing.
+pub fn covers(readme: &str) -> Vec<Result<(&str, &str), &str>> {
+    readme
+        .split_once("```covers\n")
+        .and_then(|(_, rest)| rest.split_once("```"))
+        .map_or("", |(block, _)| block)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(|line| line.split_once("::").ok_or(line))
+        .collect()
+}
+
+/// The 1-based numbers of the lines that are `// Contract:` tags.
+pub fn tag_lines(src: &str) -> Vec<usize> {
+    src.lines()
+        .enumerate()
+        .filter(|(_, line)| line.trim_start().starts_with(TAG))
+        .map(|(n, _)| n + 1)
+        .collect()
+}
+
 pub struct TaggedTest {
     pub name: String,
     pub tags: Vec<String>,
+    pub ignored: bool,
+}
+
+fn is_ignore(line: &str) -> bool {
+    matches!(
+        line.strip_prefix("#[ignore")
+            .and_then(|rest| rest.trim_start().chars().next()),
+        Some(']' | '=')
+    )
 }
 
 /// Every `#[test]` in a contract test file, with the `// Contract:` tags in
@@ -48,15 +80,31 @@ pub fn tagged_tests(src: &str) -> Vec<TaggedTest> {
             .and_then(|l| l.split('(').next())
             .unwrap_or("?")
             .to_string();
-        let tags = above
+        let attrs: Vec<&str> = above
             .iter()
             .rev()
             .map(|l| l.trim())
             .take_while(|l| l.starts_with("//") || l.starts_with("#["))
+            .collect();
+        let tags = attrs
+            .iter()
             .filter_map(|l| l.strip_prefix(TAG))
             .flat_map(|t| t.split(',').map(|s| s.trim().to_string()))
             .collect();
-        tests.push(TaggedTest { name, tags });
+        let ignored = attrs
+            .into_iter()
+            .chain(
+                below
+                    .iter()
+                    .map(|l| l.trim())
+                    .take_while(|l| !l.starts_with("fn ")),
+            )
+            .any(is_ignore);
+        tests.push(TaggedTest {
+            name,
+            tags,
+            ignored,
+        });
     }
     tests
 }
