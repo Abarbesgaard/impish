@@ -106,7 +106,7 @@ is 1; when the Contract holds the exit code is 0.
 ```covers
 src/check.rs::run
 src/check.rs::check
-src/contract.rs::obligations
+core/src/lib.rs::obligations
 src/contract.rs::tagged_tests
 src/contract.rs::covers
 src/contract.rs::contract_attributes

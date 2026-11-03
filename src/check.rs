@@ -9,7 +9,8 @@ use anyhow::{Context, anyhow, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::contract::{contract_attributes, covers, obligations, surface, tagged_tests};
+use crate::contract::{contract_attributes, covers, surface, tagged_tests};
+use impish_core::obligations;
 
 /// `impish.toml`, at the project root; every key is optional.
 #[derive(Default, Deserialize)]

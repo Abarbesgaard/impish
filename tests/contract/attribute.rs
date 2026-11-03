@@ -1,4 +1,4 @@
-use crate::harness::Crate;
+use crate::harness::{Crate, readme};
 
 #[impish::contract("attribute/A1")]
 fn a_marked_function_runs_as_a_test() {
@@ -10,6 +10,7 @@ fn proves() {
 }
 "#,
     )
+    .write("contract/p/README.md", &readme(&["A1"]))
     .test();
     assert!(!out.status.success(), "{}", out.text());
     assert!(
@@ -40,4 +41,64 @@ fn names_an_ident() {}
         "{}",
         out.text()
     );
+}
+
+#[impish::contract("attribute/A3")]
+fn a_wrong_tag_fails_to_compile() {
+    let retired = readme(&["A1"])
+        + "### A2 — Gone\n- **must:** hold\n- **kind:** functional\n- **status:** retired\n";
+    let out = Crate::with_tests(
+        r#"
+#[impish::contract("p/A1")]
+fn holds() {}
+
+#[impish::contract("p/A1", "p/A9")]
+fn undeclared() {}
+
+#[impish::contract("p/A2")]
+fn retired() {}
+
+#[impish::contract("p1")]
+fn malformed() {}
+
+#[impish::contract("r/A1")]
+fn missing() {}
+
+#[impish::contract("q/A1")]
+fn invalid() {}
+"#,
+    )
+    .write("contract/p/README.md", &retired)
+    .write(
+        "contract/q/README.md",
+        "# q\n\n## Obligations\n\nnot a block\n",
+    )
+    .test();
+    let text = out.text();
+    assert!(!out.status.success(), "{text}");
+    for says in [
+        "`p/A9`: contract/p/README.md doesn't declare A9",
+        "`p/A2`: contract/p/README.md declares A2 retired",
+        "`p1` isn't <primitive>/A<n>",
+        "`r/A1`: contract/r/README.md can't be read",
+        "`q/A1`: contract/q/README.md isn't a valid Contract; `cargo impish check` names its problems",
+    ] {
+        assert_eq!(text.matches(says).count(), 1, "{says} not once in:\n{text}");
+    }
+    assert!(!text.contains("`p/A1`"), "{text}");
+}
+
+#[impish::contract("attribute/A4")]
+fn a_changed_readme_is_checked_again() {
+    let fixture = Crate::with_tests("#[impish::contract(\"p/A1\")]\nfn holds() {}\n");
+    let first = fixture
+        .write("contract/p/README.md", &readme(&["A1"]))
+        .test();
+    assert!(first.status.success(), "{}", first.text());
+    let second = fixture
+        .write("contract/p/README.md", &readme(&["A2"]))
+        .test();
+    assert!(!second.status.success(), "{}", second.text());
+    let says = "`p/A1`: contract/p/README.md doesn't declare A1";
+    assert!(second.text().contains(says), "{}", second.text());
 }

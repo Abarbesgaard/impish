@@ -1,0 +1,6 @@
+[package]
+name = "impish-core"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "The Contract's README format, shared by cargo-impish and #[impish::contract]"

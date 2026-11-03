@@ -9,6 +9,7 @@ description = "#[impish::contract]: the attribute that marks a contract test"
 proc-macro = true
 
 [dependencies]
+impish-core = { path = "../core" }
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "3", features = ["full"] }

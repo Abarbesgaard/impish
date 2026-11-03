@@ -35,7 +35,9 @@ with the `impish` crate's attribute, which takes the place of `#[test]`:
 fn ...
 ```
 
-A plain `#[test]` there names no obligation and fails, and a test marked
+The attribute checks each tag against `contract/` as the test compiles, so
+a typo or a retired obligation is a compile error. A plain `#[test]` there
+names no obligation and fails, and a test marked
 `#[ignore]` proves nothing. The attribute belongs only in
 `tests/contract/<primitive>.rs`.
 

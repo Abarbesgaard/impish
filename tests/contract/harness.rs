@@ -136,6 +136,13 @@ impl Crate {
         Self(dir)
     }
 
+    pub fn write(&self, rel: &str, text: &str) -> &Self {
+        let path = self.0.path().join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+        self
+    }
+
     pub fn test(&self) -> Tested {
         let out = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
             .args(["test", "--test", "fixture"])

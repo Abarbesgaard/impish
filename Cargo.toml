@@ -1,8 +1,8 @@
 [workspace]
-members = ["impish"]
+members = ["core", "impish"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 publish = false
 
@@ -19,6 +19,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.104"
+impish-core = { path = "core" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 clap = { version = "4.6.7", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }
