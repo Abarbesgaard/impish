@@ -189,7 +189,8 @@ jobs:
   release:
     name: Release
     needs: ci
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # always(): the skipped PR-only jobs upstream would otherwise skip this job too.
+    if: always() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
