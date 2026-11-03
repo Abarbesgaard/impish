@@ -65,6 +65,9 @@ prints it, one `<kind> <name>` per line, in `impish.toml`:
 command = ["sh", "scripts/surface.sh"]
 ```
 
+`cargo impish check --write` writes `contract/coverage.json`, the published
+coverage of the Contract. Once it exists, `check` fails when it's out of date.
+
 Contract tests are black-box: they run the `cargo-impish` binary.
 
 `cargo impish check` holds the Contract to its tests; see `contract/check/`.

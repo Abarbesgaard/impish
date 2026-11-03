@@ -14,6 +14,7 @@ const KINDS: [&str; 5] = [
 const FIELDS: [&str; 4] = ["must", "why", "kind", "status"];
 
 pub struct Obligation {
+    pub kind: String,
     pub retired: bool,
 }
 
@@ -140,7 +141,8 @@ fn finish(
             false
         }
     };
-    if found.insert(id, Obligation { retired }).is_some() {
+    let kind = fields.get("kind").unwrap_or(&"").to_string();
+    if found.insert(id, Obligation { kind, retired }).is_some() {
         problems.push((line, format!("A{id} is declared twice")));
     }
 }

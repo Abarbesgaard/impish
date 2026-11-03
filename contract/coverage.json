@@ -1,0 +1,19 @@
+{
+  "kinds": {
+    "functional": 19,
+    "persisted-format": 1
+  },
+  "obligations": 20,
+  "primitives": {
+    "check": {
+      "obligations": 18,
+      "surface": [
+        "cli check"
+      ]
+    },
+    "cli": {
+      "obligations": 2,
+      "surface": []
+    }
+  }
+}
