@@ -161,3 +161,56 @@ impl Crate {
         }
     }
 }
+
+/// A throwaway crate with a `calc` primitive, for `cargo impish mutate`:
+/// `src/lib.rs` defines `add` and `double`, which the README covers, and
+/// `negate`, which it doesn't, and
+/// `tests/contract/calc.rs` holds `tests`. Builds share a target directory.
+pub fn calc_crate(tests: &str) -> Project {
+    let p = Project::new();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut hasher = DefaultHasher::new();
+    tests.hash(&mut hasher);
+    let manifest = format!(
+        "[package]\nname = \"calc{:x}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+         [lib]\nname = \"calc\"\n\n[dev-dependencies]\nimpish = {{ path = {:?} }}\n",
+        hasher.finish(),
+        root.join("impish")
+    );
+    let readme = readme(&["A1", "A2"]) + "```covers\nsrc/lib.rs::add\nsrc/lib.rs::double\n```\n";
+    p.write("Cargo.toml", &manifest)
+        .write(
+            "Cargo.lock",
+            &fs::read_to_string(root.join("Cargo.lock")).unwrap(),
+        )
+        .write(
+            "src/lib.rs",
+            "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n\
+             pub fn double(a: i32) -> i32 {\n    a * 2\n}\n\n\
+             pub fn negate(a: i32) -> i32 {\n    -a\n}\n",
+        )
+        .write("contract/calc/README.md", &readme)
+        .write("tests/contract/main.rs", "mod calc;\n")
+        .write("tests/contract/calc.rs", tests);
+    p
+}
+
+impl Project {
+    pub fn mutate(&self, primitive: &str) -> Checked {
+        let out = Command::new(env!("CARGO_BIN_EXE_cargo-impish"))
+            .args(["mutate", primitive])
+            .current_dir(self.0.path())
+            .env(
+                "CARGO_TARGET_DIR",
+                concat!(env!("CARGO_TARGET_TMPDIR"), "/fixtures"),
+            )
+            .env_remove("RUSTFLAGS")
+            .output()
+            .expect("run cargo-impish mutate");
+        Checked {
+            code: out.status.code(),
+            stdout: String::from_utf8(out.stdout).unwrap(),
+            stderr: String::from_utf8(out.stderr).unwrap(),
+        }
+    }
+}

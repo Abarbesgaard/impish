@@ -74,3 +74,7 @@ impish's CI publishes it in the job summary of every run.
 Contract tests are black-box: they run the `cargo-impish` binary.
 
 `cargo impish check` holds the Contract to its tests; see `contract/check/`.
+`cargo impish mutate <primitive>` breaks the code a primitive covers with
+cargo-mutants and credits each kill to the obligations whose tests caught it;
+an obligation whose tests catch nothing is hollow and fails. See
+`contract/mutate/`.

@@ -1,6 +1,8 @@
 mod check;
 mod contract;
+mod mutate;
 
+use std::path::Path;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -21,6 +23,20 @@ enum Command {
         #[arg(long)]
         write: bool,
     },
+    /// Break the code a primitive covers and credit each kill to the
+    /// obligations whose tests caught it; fail on an obligation that catches
+    /// nothing. Needs cargo-mutants.
+    Mutate {
+        /// The primitive, a directory under contract/.
+        primitive: String,
+    },
+}
+
+/// The nearest directory, from `cwd` up, that has `contract/`.
+fn root(cwd: &Path) -> anyhow::Result<&Path> {
+    cwd.ancestors()
+        .find(|dir| dir.join("contract").is_dir())
+        .ok_or_else(|| anyhow::anyhow!("no contract/ in {} or above it", cwd.display()))
 }
 
 fn main() -> anyhow::Result<ExitCode> {
@@ -29,7 +45,9 @@ fn main() -> anyhow::Result<ExitCode> {
     if args.get(1).map(String::as_str) == Some("impish") {
         args.remove(1);
     }
+    let cwd = std::env::current_dir()?;
     match Cli::parse_from(args).command {
-        Command::Check { write } => check::run(&std::env::current_dir()?, write),
+        Command::Check { write } => check::run(root(&cwd)?, write),
+        Command::Mutate { primitive } => mutate::run(root(&cwd)?, &primitive),
     }
 }
