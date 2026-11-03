@@ -1,0 +1,43 @@
+name: Pages
+
+# Publishes the Contract's coverage (rule 29) to GitHub Pages: docs/ plus
+# contract/coverage.json. Only main is published, and every merge to main has
+# passed `cargo impish check`, so the page always shows a met Contract.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "contract/coverage.json"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cp contract/coverage.json docs/coverage.json
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ./docs
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

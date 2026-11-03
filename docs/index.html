@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>impish — Contract coverage</title>
+<style>
+  :root { --bg:#0f1115; --fg:#e8e6e3; --dim:#8b8f98; --card:#171a21; --line:#262a33; --ok:#5fd38d; --gap:#f2b84b; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:56px 24px; }
+  h1 { font-size:28px; margin:0 0 4px; }
+  h2 { font-size:15px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); margin:40px 0 12px; }
+  p.lead { color:var(--dim); margin:0 0 32px; }
+  a { color:var(--fg); }
+  .hero { display:flex; gap:16px; flex-wrap:wrap; }
+  .card { flex:1 1 220px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; }
+  .big { font-size:44px; font-weight:700; line-height:1.1; }
+  .label { color:var(--dim); font-size:14px; }
+  .met { color:var(--ok); }
+  .bar { height:10px; background:var(--line); border-radius:5px; overflow:hidden; margin-top:12px; }
+  .bar > div { height:100%; background:var(--ok); }
+  table { width:100%; border-collapse:collapse; }
+  td, th { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; font-size:14px; }
+  code { font:14px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  ul.gaps { list-style:none; padding:0; margin:0; display:flex; flex-wrap:wrap; gap:8px; }
+  ul.gaps li { border:1px solid var(--gap); color:var(--gap); border-radius:6px; padding:2px 10px; }
+  ul.gaps li.none { border-color:var(--ok); color:var(--ok); }
+  footer { margin-top:56px; color:var(--dim); font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>impish</h1>
+  <p class="lead">The Contract gate for Rust. Every green merge to <code>main</code> holds the Contract, and this page publishes how much of impish it covers (<a href="https://impatientprogramming.org/rules/">Impatient Programming, rule 29</a>).</p>
+
+  <div class="hero">
+    <div class="card">
+      <div class="label">The Contract</div>
+      <div class="big met">Met</div>
+      <div class="label">checked on every merge</div>
+    </div>
+    <div class="card">
+      <div class="label">Surface covered</div>
+      <div class="big" id="percent">–</div>
+      <div class="label" id="surface-count"></div>
+      <div class="bar"><div id="bar" style="width:0"></div></div>
+    </div>
+    <div class="card">
+      <div class="label">Active obligations</div>
+      <div class="big" id="obligations">–</div>
+      <div class="label" id="primitive-count"></div>
+    </div>
+  </div>
+
+  <h2>Not yet in the Contract</h2>
+  <ul class="gaps" id="uncovered"></ul>
+
+  <h2>Primitives</h2>
+  <table>
+    <thead><tr><th>Primitive</th><th>Obligations</th><th>Surface</th></tr></thead>
+    <tbody id="primitives"></tbody>
+  </table>
+
+  <h2>Obligations by kind</h2>
+  <table><tbody id="kinds"></tbody></table>
+
+  <footer>Built from <code>contract/coverage.json</code>, which <code>cargo impish check --write</code> keeps current.</footer>
+</main>
+<script>
+const text = (tag, value) => { const el = document.createElement(tag); el.textContent = value; return el; };
+const row = (...cells) => { const tr = document.createElement("tr"); cells.forEach(c => tr.append(text("td", c))); return tr; };
+fetch("coverage.json").then(r => r.json()).then(c => {
+  const s = c.surface ?? { covered: 0, total: 0, percent: 0 };
+  document.getElementById("percent").textContent = s.percent + "%";
+  document.getElementById("surface-count").textContent = s.covered + " of " + s.total + " commands";
+  document.getElementById("bar").style.width = s.percent + "%";
+  const primitives = Object.entries(c.primitives);
+  document.getElementById("obligations").textContent = c.obligations;
+  document.getElementById("primitive-count").textContent = "across " + primitives.length + " primitives";
+  const gaps = document.getElementById("uncovered");
+  (c.uncovered ?? []).forEach(u => gaps.append(text("li", u)));
+  if (!gaps.children.length) { const li = text("li", "nothing — every command is covered"); li.className = "none"; gaps.append(li); }
+  const body = document.getElementById("primitives");
+  primitives.forEach(([name, p]) => body.append(row(name, p.obligations, p.surface.join(", ") || "—")));
+  const kinds = document.getElementById("kinds");
+  Object.entries(c.kinds).forEach(([kind, n]) => kinds.append(row(kind, n)));
+});
+</script>
+</body>
+</html>
