@@ -30,15 +30,31 @@ pub fn obligations(readme: &str, file: &str) -> Result<BTreeSet<u32>, String> {
 /// The `(file, function)` pairs in a README's covers block, or the line that
 /// isn't `<file>::<function>`. A README without the block covers nothing.
 pub fn covers(readme: &str) -> Vec<Result<(&str, &str), &str>> {
+    block(readme, "covers")
+        .map(|line| line.split_once("::").ok_or(line))
+        .collect()
+}
+
+/// The `<kind> <name>` lines in a README's surface block, or the line that
+/// isn't in that form. A README without the block has no surface.
+pub fn surface(readme: &str) -> Vec<Result<&str, &str>> {
+    block(readme, "surface")
+        .map(|line| match line.split_once(' ') {
+            Some((_, name)) if !name.contains(' ') => Ok(line),
+            _ => Err(line),
+        })
+        .collect()
+}
+
+/// The non-blank, trimmed lines of a README's first ```` ```kind ```` block.
+fn block<'a>(readme: &'a str, kind: &str) -> impl Iterator<Item = &'a str> {
     readme
-        .split_once("```covers\n")
+        .split_once(&format!("```{kind}\n"))
         .and_then(|(_, rest)| rest.split_once("```"))
         .map_or("", |(block, _)| block)
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
-        .map(|line| line.split_once("::").ok_or(line))
-        .collect()
 }
 
 /// The 1-based numbers of the lines that are `// Contract:` tags.

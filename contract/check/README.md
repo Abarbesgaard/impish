@@ -18,6 +18,8 @@ is 1; when the Contract holds the exit code is 0.
 - **A9** Every `<file>::<function>` in a README's ```` ```covers ```` block must be a function defined in that file; a missing one, or a line not in that form, fails, naming it.
 - **A10** A test marked `#[ignore]` proves nothing: an obligation only ignored tests name fails, naming them.
 - **A11** A `// Contract:` tag in `src/` or `tests/` outside a primitive's test file fails, naming the file and line.
+- **A12** Every line in a README's ```` ```surface ```` block must be `<kind> <name>`; a line that isn't fails, naming it.
+- **A13** With `[surface] command` set in `impish.toml`, every surface line must be one the command prints; one it doesn't print fails, naming it, and a command that fails makes `check` fail.
 
 ```covers
 src/check.rs::run
@@ -26,4 +28,10 @@ src/contract.rs::obligations
 src/contract.rs::tagged_tests
 src/contract.rs::covers
 src/contract.rs::tag_lines
+src/contract.rs::surface
+src/check.rs::real_surface
+```
+
+```surface
+cli check
 ```
