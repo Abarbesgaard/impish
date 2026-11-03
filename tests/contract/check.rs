@@ -239,3 +239,72 @@ fn a_tag_outside_a_primitive_test_file_fails() {
         )
     );
 }
+
+fn with_surface(lines: &str) -> Project {
+    let p = calc(&[], &test_fn("adds", &["calc/A1"]));
+    let surface = format!("{}\n```surface\n{lines}```\n", readme(&["A1"]));
+    p.write("contract/calc/README.md", &surface);
+    p
+}
+
+const LISTS_ADD_AND_FIND: &str =
+    "[surface]\ncommand = [\"sh\", \"-c\", \"printf 'cli add\\\\n\\\\n  mcp find  \\\\n'\"]\n";
+
+// Contract: check/A12
+#[test]
+fn surface_lines_must_be_kind_and_name() {
+    let out = with_surface("cli add\n\nmcp find\n").check();
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    let out = with_surface("cli\ncli two words\ncli add\n").check();
+    assert_eq!(out.code, Some(1));
+    let file = "contract/calc/README.md";
+    assert_eq!(
+        out.stderr,
+        format!(
+            "{file}: surface line `cli` is not <kind> <name>\n\
+             {file}: surface line `cli two words` is not <kind> <name>\n\
+             {NOT_MET}\n"
+        )
+    );
+}
+
+// Contract: check/A13
+#[test]
+fn surface_lines_the_command_prints_hold() {
+    let p = with_surface("cli add\nmcp find\n");
+    p.write("impish.toml", LISTS_ADD_AND_FIND);
+    let out = p.check();
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+}
+
+// Contract: check/A13
+#[test]
+fn a_surface_line_the_command_doesnt_print_fails() {
+    let p = with_surface("cli add\nmcp add\ncli nope\n");
+    p.write("impish.toml", LISTS_ADD_AND_FIND);
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    let file = "contract/calc/README.md";
+    assert_eq!(
+        out.stderr,
+        format!(
+            "{file}: surface `mcp add` is not in the surface command's output\n\
+             {file}: surface `cli nope` is not in the surface command's output\n\
+             {NOT_MET}\n"
+        )
+    );
+}
+
+// Contract: check/A13
+#[test]
+fn a_failing_surface_command_fails_check() {
+    let p = with_surface("cli add\n");
+    p.write(
+        "impish.toml",
+        "[surface]\ncommand = [\"sh\", \"-c\", \"echo broken >&2; exit 3\"]\n",
+    );
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    assert!(out.stderr.contains("surface command"), "{}", out.stderr);
+    assert!(out.stderr.contains("broken"), "{}", out.stderr);
+}

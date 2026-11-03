@@ -35,6 +35,23 @@ src/check.rs::run
 ```
 ````
 
+A README may also list the surface its tests drive (commands, tools,
+endpoints) in a surface block of `<kind> <name>` lines:
+
+````markdown
+```surface
+cli check
+```
+````
+
+To check those lines against the real surface, give impish a command that
+prints it, one `<kind> <name>` per line, in `impish.toml`:
+
+```toml
+[surface]
+command = ["sh", "scripts/surface.sh"]
+```
+
 Contract tests are black-box: they run the `cargo-impish` binary.
 
 `cargo impish check` holds the Contract to its tests; see `contract/check/`.
