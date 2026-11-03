@@ -137,6 +137,39 @@ jobs:
           name: mutants.out
           path: mutants.out
 
+  # The exhale of rule 12: a function this PR adds or edits that looks like
+  # another one fails, unless the pair is on the base already or declared in
+  # scripts/similar-code.allow.
+  similar:
+    name: Similar code
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: similarity-rs
+      - name: No new similar functions
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          status=0
+          scripts/similar-code.sh "origin/${BASE_REF}" > report.txt || status=$?
+          cat report.txt
+          {
+            echo "### Similar code"
+            echo '```'
+            sed -E 's/^::(warning|error) file=([^,]+),line=([0-9]+),title=Similar code::/\2:\3: \1: /' report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
   version:
     name: Version
     if: github.event_name == 'pull_request'
@@ -155,7 +188,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
-          shipped=$(git diff --name-only "origin/${BASE_REF}..." -- src Cargo.toml Cargo.lock)
+          shipped=$(git diff --name-only "origin/${BASE_REF}..." -- src core impish Cargo.toml Cargo.lock)
           if [ -z "$shipped" ] || [ "$AUTHOR" = "dependabot[bot]" ]; then
             echo "Nothing that ships changed, or this is Dependabot; no bump needed."
             exit 0
@@ -174,7 +207,7 @@ jobs:
   # let a failure through; this one fails if anything failed or was cancelled.
   ci:
     name: CI
-    needs: [lint, test, deny, zizmor, mutants, version]
+    needs: [lint, test, deny, zizmor, mutants, similar, version]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

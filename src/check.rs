@@ -166,6 +166,9 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         let readme_file = format!("contract/{name}/README.md");
         for target in covers(&readme) {
             report.problems.push(match target {
+                Ok((file, func)) if escapes(file) => {
+                    format!("{readme_file}: covers `{file}::{func}`, which is outside the crate")
+                }
                 Ok((file, func)) if defines(root, file, func) => continue,
                 Ok((file, func)) => {
                     format!("{readme_file}: covers `{file}::{func}`, which doesn't exist")
@@ -258,6 +261,14 @@ fn check(root: &Path) -> anyhow::Result<Report> {
     report.problems.extend(stray_tags(root, &names));
     report.real = real;
     Ok(report)
+}
+
+/// Whether a covers file could name something outside the crate.
+fn escapes(file: &str) -> bool {
+    use std::path::Component::{ParentDir, Prefix, RootDir};
+    Path::new(file)
+        .components()
+        .any(|c| matches!(c, ParentDir | RootDir | Prefix(_)))
 }
 
 fn defines(root: &Path, file: &str, func: &str) -> bool {

@@ -102,3 +102,35 @@ fn a_changed_readme_is_checked_again() {
     let says = "`p/A1`: contract/p/README.md doesn't declare A1";
     assert!(second.text().contains(says), "{}", second.text());
 }
+
+#[impish::contract("attribute/A5")]
+fn a_tag_that_leaves_contract_fails_to_compile() {
+    let out = Crate::with_tests(
+        r#"
+#[impish::contract("p-1_x/A1")]
+fn plain() {}
+
+#[impish::contract("../contract/p-1_x/A1")]
+fn climbs() {}
+
+#[impish::contract("p-1_x/../p-1_x/A1")]
+fn climbs_inside() {}
+
+#[impish::contract("/A1")]
+fn unnamed() {}
+"#,
+    )
+    .write("contract/p-1_x/README.md", &readme(&["A1"]))
+    .test();
+    let text = out.text();
+    assert!(!out.status.success(), "{text}");
+    for tag in ["../contract/p-1_x/A1", "p-1_x/../p-1_x/A1", "/A1"] {
+        let says = format!("`{tag}`: the primitive must be letters, digits, `-` and `_`");
+        assert_eq!(
+            text.matches(&says).count(),
+            1,
+            "{says} not once in:\n{text}"
+        );
+    }
+    assert!(!text.contains("`p-1_x/A1`"), "{text}");
+}

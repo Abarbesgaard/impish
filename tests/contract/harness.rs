@@ -1,6 +1,7 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use tempfile::TempDir;
@@ -54,6 +55,27 @@ impl Project {
 
     pub fn run(&self, args: &[&str]) -> Checked {
         self.run_in(".", args)
+    }
+
+    pub fn path(&self) -> &Path {
+        self.0.path()
+    }
+
+    /// Every file in the project, by path, with its bytes.
+    pub fn files(&self) -> BTreeMap<PathBuf, Vec<u8>> {
+        fn walk(dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
+            for entry in fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else {
+                    out.insert(path.clone(), fs::read(&path).unwrap());
+                }
+            }
+        }
+        let mut out = BTreeMap::new();
+        walk(self.0.path(), &mut out);
+        out
     }
 
     pub fn read(&self, rel: &str) -> String {

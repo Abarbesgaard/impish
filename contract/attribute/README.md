@@ -28,6 +28,12 @@ is a compile error.
 - **kind:** functional
 - **status:** active
 
+### A5 — Tags stay inside contract/
+- **must:** fail to compile, naming the tag, when a tag's primitive isn't made of letters, digits, `-` and `_`, without reading any file for it
+- **why:** the tag is a path into `contract/`, and the attribute runs inside the compiler
+- **kind:** security
+- **status:** active
+
 ```covers
 impish/src/lib.rs::contract
 ```

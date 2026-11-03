@@ -30,3 +30,8 @@ install a specific one from the [releases](https://github.com/Abarbesgaard/impis
 <primitive>` checks that those tests have teeth: it breaks the code the
 primitive covers with [cargo-mutants](https://mutants.rs) and fails on an
 obligation whose tests catch none of the breaks.
+
+## Contributing
+
+[ARCHITECTURE.md](ARCHITECTURE.md) says where each part lives and which
+guardrails fire on a change; [docs/decisions](docs/decisions/) says why.

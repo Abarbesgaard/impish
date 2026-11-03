@@ -1,18 +1,20 @@
 {
   "kinds": {
     "functional": 29,
-    "persisted-format": 1
+    "non-functional": 1,
+    "persisted-format": 1,
+    "security": 2
   },
-  "obligations": 30,
+  "obligations": 33,
   "primitives": {
     "attribute": {
-      "obligations": 4,
+      "obligations": 5,
       "surface": [
         "attribute impish::contract"
       ]
     },
     "check": {
-      "obligations": 19,
+      "obligations": 21,
       "surface": [
         "cli check"
       ]

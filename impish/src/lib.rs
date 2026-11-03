@@ -51,6 +51,12 @@ fn check(root: &std::path::Path, tag: &str) -> Result<String, String> {
         .rsplit_once("/A")
         .and_then(|(p, n)| Some((p, n.parse::<u32>().ok()?)))
         .ok_or_else(|| format!("`{tag}` isn't <primitive>/A<n>"))?;
+    let plain = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
+    if primitive.is_empty() || !primitive.chars().all(plain) {
+        return Err(format!(
+            "`{tag}`: the primitive must be letters, digits, `-` and `_`"
+        ));
+    }
     let file = format!("contract/{primitive}/README.md");
     let path = root.join(&file);
     let text =
