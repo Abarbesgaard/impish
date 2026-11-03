@@ -72,10 +72,19 @@ impl Project {
     }
 }
 
-/// A `#[test]` named `name`, tagged with each of `tags` on its own line.
+/// A contract test named `name` that proves `tags`, each of which may list
+/// several obligations separated by commas; with no tags, a plain `#[test]`.
 pub fn test_fn(name: &str, tags: &[&str]) -> String {
-    let tags: String = tags.iter().map(|t| format!("// Contract: {t}\n")).collect();
-    format!("{tags}{}\nfn {name}() {{}}\n\n", "#[test]")
+    let tags: Vec<String> = tags
+        .iter()
+        .flat_map(|t| t.split(", "))
+        .map(|t| format!("{t:?}"))
+        .collect();
+    let attr = match tags.is_empty() {
+        true => "#[test]".to_string(),
+        false => format!("#[impish::contract({})]", tags.join(", ")),
+    };
+    format!("{attr}\nfn {name}() {{}}\n\n")
 }
 
 /// A README declaring each of `ids` as an obligation.

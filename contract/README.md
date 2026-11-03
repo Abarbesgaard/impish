@@ -27,16 +27,16 @@ and needs no test. Every line under `## Obligations` must belong to a block, and
 an obligation outside it fails, so a promise can't silently fall out of the
 Contract. Fenced code blocks are skipped.
 
-Every `#[test]` in `tests/contract/<primitive>.rs` names the obligations it
-proves in a comment above it:
+Every test in `tests/contract/<primitive>.rs` names the obligations it proves
+with the `impish` crate's attribute, which takes the place of `#[test]`:
 
 ```rust
-// Contract: cli/A1
-#[test]
+#[impish::contract("cli/A1", "cli/A2")]
 fn ...
 ```
 
-A test marked `#[ignore]` proves nothing. Tags belong only in
+A plain `#[test]` there names no obligation and fails, and a test marked
+`#[ignore]` proves nothing. The attribute belongs only in
 `tests/contract/<primitive>.rs`.
 
 A README may list the code its obligations are about in a covers block of

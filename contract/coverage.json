@@ -1,9 +1,9 @@
 {
   "kinds": {
-    "functional": 21,
+    "functional": 22,
     "persisted-format": 1
   },
-  "obligations": 22,
+  "obligations": 23,
   "primitives": {
     "attribute": {
       "obligations": 2,
@@ -12,7 +12,7 @@
       ]
     },
     "check": {
-      "obligations": 18,
+      "obligations": 19,
       "surface": [
         "cli check"
       ]
