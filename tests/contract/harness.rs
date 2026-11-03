@@ -1,4 +1,5 @@
 use std::fs;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -86,4 +87,61 @@ pub fn readme(ids: &[&str]) -> String {
         })
         .collect();
     format!("# A primitive\n\n## Obligations\n\n{lines}")
+}
+
+/// A throwaway crate whose tests use the `impish` attribute, built against
+/// this workspace's `impish` and `Cargo.lock` into a shared target directory.
+pub struct Crate(TempDir);
+
+pub struct Tested {
+    pub status: std::process::ExitStatus,
+    stdout: String,
+    stderr: String,
+}
+
+impl Tested {
+    pub fn text(&self) -> String {
+        format!("{}\n{}", self.stdout, self.stderr)
+    }
+}
+
+impl Crate {
+    pub fn with_tests(src: &str) -> Self {
+        let dir = TempDir::new().expect("temp dir");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        // Fixtures share a target directory, so each needs its own name.
+        let mut hasher = DefaultHasher::new();
+        src.hash(&mut hasher);
+        let manifest = format!(
+            "[package]\nname = \"fixture{:x}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+             [dev-dependencies]\nimpish = {{ path = {:?} }}\n",
+            hasher.finish(),
+            root.join("impish")
+        );
+        fs::write(dir.path().join("Cargo.toml"), manifest).unwrap();
+        fs::copy(root.join("Cargo.lock"), dir.path().join("Cargo.lock")).unwrap();
+        fs::create_dir_all(dir.path().join("src")).unwrap();
+        fs::write(dir.path().join("src/lib.rs"), "").unwrap();
+        fs::create_dir_all(dir.path().join("tests")).unwrap();
+        fs::write(dir.path().join("tests/fixture.rs"), src).unwrap();
+        Self(dir)
+    }
+
+    pub fn test(&self) -> Tested {
+        let out = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
+            .args(["test", "--test", "fixture"])
+            .current_dir(self.0.path())
+            .env(
+                "CARGO_TARGET_DIR",
+                concat!(env!("CARGO_TARGET_TMPDIR"), "/fixtures"),
+            )
+            .env_remove("RUSTFLAGS")
+            .output()
+            .expect("run cargo test");
+        Tested {
+            status: out.status,
+            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        }
+    }
 }

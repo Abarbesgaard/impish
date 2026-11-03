@@ -1,1 +1,4 @@
 # cargo-mutants config: https://mutants.rs/
+
+# Contract tests live in the root package and also prove the impish crate.
+test_workspace = true

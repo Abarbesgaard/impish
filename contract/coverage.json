@@ -1,10 +1,16 @@
 {
   "kinds": {
-    "functional": 19,
+    "functional": 21,
     "persisted-format": 1
   },
-  "obligations": 20,
+  "obligations": 22,
   "primitives": {
+    "attribute": {
+      "obligations": 2,
+      "surface": [
+        "attribute impish::contract"
+      ]
+    },
     "check": {
       "obligations": 18,
       "surface": [
@@ -17,9 +23,9 @@
     }
   },
   "surface": {
-    "covered": 1,
+    "covered": 2,
     "percent": 100.0,
-    "total": 1
+    "total": 2
   },
   "uncovered": []
 }
