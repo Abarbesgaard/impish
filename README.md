@@ -25,3 +25,8 @@ impish = { git = "https://github.com/Abarbesgaard/impish" }
 
 Every merge that changes what ships is a release; add `--tag v<version>` to
 install a specific one from the [releases](https://github.com/Abarbesgaard/impish/releases).
+
+`cargo impish check` holds the Contract to its tests. `cargo impish mutate
+<primitive>` checks that those tests have teeth: it breaks the code the
+primitive covers with [cargo-mutants](https://mutants.rs) and fails on an
+obligation whose tests catch none of the breaks.

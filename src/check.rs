@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-use anyhow::{Context, anyhow, bail};
+use anyhow::{Context, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
@@ -103,11 +103,7 @@ fn coverage(report: &Report) -> Value {
     value
 }
 
-pub fn run(cwd: &Path, write: bool) -> anyhow::Result<ExitCode> {
-    let root = cwd
-        .ancestors()
-        .find(|dir| dir.join("contract").is_dir())
-        .ok_or_else(|| anyhow!("no contract/ in {} or above it", cwd.display()))?;
+pub fn run(root: &Path, write: bool) -> anyhow::Result<ExitCode> {
     let mut report = check(root)?;
     let path = root.join("contract/coverage.json");
     let text = serde_json::to_string_pretty(&coverage(&report))? + "\n";

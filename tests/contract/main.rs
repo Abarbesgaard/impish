@@ -4,6 +4,7 @@ mod attribute;
 mod check;
 mod cli;
 mod harness;
+mod mutate;
 
 /// impish's contract tests are made by `#[impish::contract]` itself, so a
 /// broken attribute could delete its own proofs and leave `cargo test` green.

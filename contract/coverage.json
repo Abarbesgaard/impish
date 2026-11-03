@@ -1,9 +1,9 @@
 {
   "kinds": {
-    "functional": 24,
+    "functional": 29,
     "persisted-format": 1
   },
-  "obligations": 25,
+  "obligations": 30,
   "primitives": {
     "attribute": {
       "obligations": 4,
@@ -20,12 +20,18 @@
     "cli": {
       "obligations": 2,
       "surface": []
+    },
+    "mutate": {
+      "obligations": 5,
+      "surface": [
+        "cli mutate"
+      ]
     }
   },
   "surface": {
-    "covered": 2,
+    "covered": 3,
     "percent": 100.0,
-    "total": 2
+    "total": 3
   },
   "uncovered": []
 }
