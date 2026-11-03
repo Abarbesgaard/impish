@@ -5,8 +5,15 @@ How impish is run. Cargo runs `cargo impish <args>` as
 
 ## Obligations
 
-- **A1** `cargo impish <args>` and `cargo-impish <args>` behave the same.
-- **A2** `--version` prints `cargo impish` and the crate's version, and exits 0.
+### A1 — Both invocations agree
+- **must:** make `cargo impish <args>` and `cargo-impish <args>` behave the same
+- **kind:** functional
+- **status:** active
+
+### A2 — --version names the tool
+- **must:** print `cargo impish` and the crate's version for `--version`, and exit 0
+- **kind:** functional
+- **status:** active
 
 ```covers
 src/main.rs::main

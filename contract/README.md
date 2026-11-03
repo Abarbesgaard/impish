@@ -8,11 +8,24 @@ contract/<primitive>/README.md   purpose, obligations, covers block
 tests/contract/<primitive>.rs    the tests that prove them
 ```
 
-An obligation is one line, numbered `A1`, `A2`, … and never renumbered:
+Obligations sit under `## Obligations`, one block each, numbered `A1`, `A2`, …
+and never renumbered:
 
 ```markdown
-- **A1** One sentence a test can prove.
+## Obligations
+
+### A1 — A held Contract passes
+- **must:** say how many obligations were checked, and exit 0
+- **why:** optional; the reason the obligation exists
+- **kind:** functional
+- **status:** active
 ```
+
+`kind` is one of functional, non-functional, persisted-format, ordering or
+security; `status` is active or retired. A retired obligation keeps its number
+and needs no test. Every line under `## Obligations` must belong to a block, and
+an obligation outside it fails, so a promise can't silently fall out of the
+Contract. Fenced code blocks are skipped.
 
 Every `#[test]` in `tests/contract/<primitive>.rs` names the obligations it
 proves in a comment above it:

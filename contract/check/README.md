@@ -7,19 +7,85 @@ is 1; when the Contract holds the exit code is 0.
 
 ## Obligations
 
-- **A1** When every obligation is proved, `check` says how many obligations and primitives it checked, and exits 0.
-- **A2** An obligation no test names fails, naming the obligation.
-- **A3** A test that names no obligation fails, naming the test.
-- **A4** A tag naming an obligation its primitive doesn't declare fails, naming the tag.
-- **A5** A malformed obligation line, a number declared twice, or a README with no obligations fails, naming the file and line.
-- **A6** A primitive missing its README or its test file fails, naming what's missing.
-- **A7** `check` uses the nearest directory, from the current one up, that has `contract/`; with none, it fails.
-- **A8** Every problem is reported, not only the first.
-- **A9** Every `<file>::<function>` in a README's ```` ```covers ```` block must be a function defined in that file; a missing one, or a line not in that form, fails, naming it.
-- **A10** A test marked `#[ignore]` proves nothing: an obligation only ignored tests name fails, naming them.
-- **A11** A `// Contract:` tag in `src/` or `tests/` outside a primitive's test file fails, naming the file and line.
-- **A12** Every line in a README's ```` ```surface ```` block must be `<kind> <name>`; a line that isn't fails, naming it.
-- **A13** With `[surface] command` set in `impish.toml`, every surface line must be one the command prints; one it doesn't print fails, naming it, and a command that fails makes `check` fail.
+### A1 — A held Contract passes
+- **must:** when every obligation is proved, say how many obligations and primitives were checked, and exit 0
+- **kind:** functional
+- **status:** active
+
+### A2 — An unproved obligation fails
+- **must:** fail, naming each obligation no test names
+- **kind:** functional
+- **status:** active
+
+### A3 — An untagged test fails
+- **must:** fail, naming each test that names no obligation
+- **kind:** functional
+- **status:** active
+
+### A4 — An unknown tag fails
+- **must:** fail, naming each tag for an obligation its primitive doesn't declare
+- **kind:** functional
+- **status:** active
+
+### A5 — A malformed obligation list fails
+- **must:** fail, naming the file and line, when a line under `## Obligations` isn't part of a block, a heading isn't `### A<n> — <title>`, a field is unknown, given twice or missing (`must`, `kind`, `status`), a number is declared twice, or a README declares no obligations
+- **kind:** functional
+- **status:** active
+
+### A6 — A missing file fails
+- **must:** fail, naming what's missing, when a primitive has no README or no test file
+- **kind:** functional
+- **status:** active
+
+### A7 — The Contract is found from below
+- **must:** use the nearest directory, from the current one up, that has `contract/`, and fail when there is none
+- **kind:** functional
+- **status:** active
+
+### A8 — Every problem is reported
+- **must:** report every problem, not only the first
+- **kind:** functional
+- **status:** active
+
+### A9 — Covers name real functions
+- **must:** fail, naming it, on a covers line that isn't `<file>::<function>` or names a function the file doesn't define
+- **kind:** functional
+- **status:** active
+
+### A10 — Ignored tests prove nothing
+- **must:** not count a test marked `#[ignore]` as proof, and name the ignored tests when an obligation is left without one
+- **kind:** functional
+- **status:** active
+
+### A11 — Tags stay in contract tests
+- **must:** fail, naming the file and line, on a `// Contract:` tag in `src/` or `tests/` outside a primitive's test file
+- **kind:** functional
+- **status:** active
+
+### A12 — Surface lines are kind and name
+- **must:** fail, naming it, on a surface line that isn't `<kind> <name>`
+- **kind:** functional
+- **status:** active
+
+### A13 — Surface lines are real
+- **must:** with `[surface] command` in `impish.toml`, fail, naming it, on a surface line the command doesn't print, and fail when the command fails
+- **kind:** functional
+- **status:** active
+
+### A14 — Kind and status are known
+- **must:** fail, naming the file and line, on a `kind` other than functional, non-functional, persisted-format, ordering or security, or a `status` other than active or retired
+- **kind:** functional
+- **status:** active
+
+### A15 — Retired obligations need no test
+- **must:** not require a test for a retired obligation, and fail, naming the tag, on a test that names one
+- **kind:** functional
+- **status:** active
+
+### A16 — Obligations live under ## Obligations
+- **must:** fail, naming the file and line, on an obligation heading or a `- **A<n>**` line outside `## Obligations`
+- **kind:** functional
+- **status:** active
 
 ```covers
 src/check.rs::run

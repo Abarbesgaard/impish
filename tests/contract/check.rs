@@ -22,7 +22,10 @@ fn a_held_contract_passes_and_says_what_it_checked() {
         "fn sums() {}",
     ];
     p.write("contract/README.md", "# The Contract\n")
-        .write("contract/sum/README.md", &readme(&["A1"]))
+        .write(
+            "contract/sum/README.md",
+            &readme(&["A1"]).replace(" — ", " - "),
+        )
         .write("tests/contract/sum.rs", &sum.join("\n"));
     let out = p.check();
     assert_eq!(out.code, Some(0), "{}", out.stderr);
@@ -64,32 +67,114 @@ fn a_tag_the_primitive_doesnt_declare_fails_by_name() {
     }
 }
 
+// Contract: check/A5, check/A14, check/A16
+#[test]
+fn a_malformed_obligation_list_fails_with_file_and_line() {
+    let text = [
+        "# calc",
+        "",
+        "## Obligations",
+        "",
+        "Some prose.",
+        "### A1",
+        "### Ax - Adds",
+        "### A2 — Adds",
+        "- **must:** add",
+        "- **must:** add",
+        "- **scope:** x",
+        "- **kind:** fast",
+        "- **status:** done",
+        "- **why:**",
+        "### A2 - Again",
+        "- **must:** again",
+        "### A3 — Fine",
+        "- **must:** hold",
+        "- **why:** ```not a fence```",
+        "- **kind:** functional",
+        "- **status:** active",
+        "",
+        "```text",
+        "- **A9** in a fence",
+        "```",
+        "## Notes",
+        "- **A4** Old style.",
+        "### A5 — Late",
+    ];
+    let p = calc(&[], &test_fn("adds", &["calc/A3"]));
+    p.write("contract/calc/README.md", &text.join("\n"));
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    let f = "contract/calc/README.md";
+    let expected = [
+        format!("{f}:5: `Some prose.` is not part of an obligation block"),
+        format!("{f}:6: malformed obligation heading `### A1`"),
+        format!("{f}:7: malformed obligation heading `### Ax - Adds`"),
+        format!(
+            "{f}:8: A2 has kind `fast`, not one of functional, non-functional, persisted-format, ordering, security"
+        ),
+        format!("{f}:8: A2 has status `done`, not active or retired"),
+        format!("{f}:10: `must` is given twice"),
+        format!("{f}:11: unknown field `scope`"),
+        format!("{f}:14: `- **why:**` is not part of an obligation block"),
+        format!("{f}:15: A2 has no `kind`"),
+        format!("{f}:15: A2 has no `status`"),
+        format!("{f}:15: A2 is declared twice"),
+        format!("{f}:27: an obligation outside ## Obligations"),
+        format!("{f}:28: an obligation outside ## Obligations"),
+        NOT_MET.to_string(),
+    ];
+    assert_eq!(out.stderr, expected.join("\n") + "\n");
+}
+
 // Contract: check/A5
 #[test]
-fn a_bad_obligation_list_fails_with_file_and_line() {
-    let file = "contract/calc/README.md";
-    let tests = test_fn("adds", &["calc/A1"]);
-    for (text, problem) in [
-        (
-            "# calc\n\n- **A1** Adds.\n- **A1**\n",
-            format!("{file}:4: malformed obligation `- **A1**`"),
-        ),
-        (
-            "# calc\n- **Ax** Adds.\n",
-            format!("{file}:2: malformed obligation `- **Ax** Adds.`"),
-        ),
-        (
-            "# calc\n- **A1** Adds.\n\n- **A1** Again.\n",
-            format!("{file}:4: A1 is declared twice"),
-        ),
-        ("# calc\n", format!("{file}: declares no obligations")),
-    ] {
-        let p = calc(&[], &tests);
-        p.write(file, text);
+fn a_readme_without_obligations_fails() {
+    for text in ["# calc\n", "# calc\n\n## Obligations\n\n## Notes\n"] {
+        let p = calc(&[], &test_fn("adds", &["calc/A1"]));
+        p.write("contract/calc/README.md", text);
         let out = p.check();
         assert_eq!(out.code, Some(1));
-        assert_eq!(out.stderr, format!("{problem}\n{NOT_MET}\n"));
+        assert!(
+            out.reports("contract/calc/README.md: declares no obligations"),
+            "{}",
+            out.stderr
+        );
     }
+}
+
+// Contract: check/A15
+#[test]
+fn retired_obligations_need_no_test_and_take_no_tags() {
+    let text = [
+        "## Obligations",
+        "### A1 — Adds",
+        "- **must:** add",
+        "- **kind:** functional",
+        "- **status:** active",
+        "### A2 — Subtracts",
+        "- **must:** subtract",
+        "- **kind:** non-functional",
+        "- **status:** retired",
+    ]
+    .join("\n");
+    let p = calc(&[], &test_fn("adds", &["calc/A1"]));
+    p.write("contract/calc/README.md", &text);
+    let out = p.check();
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(
+        out.stdout.trim(),
+        "The Contract holds: 1 obligations across 1 primitives."
+    );
+    p.write(
+        "tests/contract/calc.rs",
+        &test_fn("adds", &["calc/A1, calc/A2"]),
+    );
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    assert_eq!(
+        out.stderr,
+        format!("calc::adds names `calc/A2`, which is retired\n{NOT_MET}\n")
+    );
 }
 
 // Contract: check/A6
