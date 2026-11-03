@@ -15,5 +15,11 @@
       "obligations": 2,
       "surface": []
     }
-  }
+  },
+  "surface": {
+    "covered": 1,
+    "percent": 100.0,
+    "total": 1
+  },
+  "uncovered": []
 }

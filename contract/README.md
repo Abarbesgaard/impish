@@ -67,6 +67,8 @@ command = ["sh", "scripts/surface.sh"]
 
 `cargo impish check --write` writes `contract/coverage.json`, the published
 coverage of the Contract. Once it exists, `check` fails when it's out of date.
+impish publishes its own on every merge to `main`:
+https://abarbesgaard.github.io/impish/
 
 Contract tests are black-box: they run the `cargo-impish` binary.
 
