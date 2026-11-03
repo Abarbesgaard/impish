@@ -1,9 +1,17 @@
-[package]
-name = "impish"
-version = "0.1.0"
+[workspace]
+members = ["impish"]
+
+[workspace.package]
+version = "0.2.0"
 edition = "2024"
-description = "The Contract gate for Rust, after Impatient Programming"
 publish = false
+
+[package]
+name = "cargo-impish"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "The Contract gate for Rust, after Impatient Programming"
 
 [[bin]]
 name = "cargo-impish"

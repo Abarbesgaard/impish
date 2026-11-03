@@ -1,0 +1,14 @@
+[package]
+name = "impish"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "#[impish::contract]: the attribute that marks a contract test"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
