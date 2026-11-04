@@ -197,12 +197,15 @@ impl Crate {
 /// A throwaway crate with a `calc` primitive, for `cargo impish mutate`:
 /// `src/lib.rs` defines `add` and `double`, which the README covers, and
 /// `negate`, which it doesn't, and
-/// `tests/contract/calc.rs` holds `tests`. Builds share a target directory.
+/// `tests/contract/calc.rs` holds `tests`. Builds share a target directory,
+/// under a package name of their own.
 pub fn calc_crate(tests: &str) -> Project {
     let p = Project::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // Mutate builds share a target directory, and tests run in parallel: two
+    // fixtures with one package name would build over each other's mutants.
     let mut hasher = DefaultHasher::new();
-    tests.hash(&mut hasher);
+    p.path().hash(&mut hasher);
     let manifest = format!(
         "[package]\nname = \"calc{:x}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
          [lib]\nname = \"calc\"\n\n[dev-dependencies]\nimpish = {{ path = {:?} }}\n",
