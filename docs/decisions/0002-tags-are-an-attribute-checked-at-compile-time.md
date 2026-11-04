@@ -5,7 +5,7 @@
 ## Decision
 
 A contract test is a function marked `#[impish::contract("<primitive>/A<n>", …)]`
-instead of `#[test]`. The attribute checks each tag against the primitive's
+instead of, or beside, `#[test]` ([0010](0010-the-attribute-goes-beside-the-test-attribute.md)). The attribute checks each tag against the primitive's
 README while the test compiles, and includes the README in the build so a
 change to it rechecks the tags. `check` finds tests by parsing test files with
 `syn`, not by scanning lines.

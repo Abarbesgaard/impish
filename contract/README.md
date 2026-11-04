@@ -28,7 +28,8 @@ an obligation outside it fails, so a promise can't silently fall out of the
 Contract. Fenced code blocks are skipped.
 
 Every test in `tests/contract/<primitive>.rs` names the obligations it proves
-with the `impish` crate's attribute, which takes the place of `#[test]`:
+with the `impish` crate's attribute. On its own it makes the function a test;
+under an existing `#[test]` or `#[tokio::test]` it keeps that one:
 
 ```rust
 #[impish::contract("cli/A1", "cli/A2")]

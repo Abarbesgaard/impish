@@ -2,7 +2,8 @@
 
 `#[impish::contract("<primitive>/A<n>", …)]` marks a contract test: the
 obligations it proves. It comes from the `impish` crate, a dev-dependency of
-the crate whose Contract it is, and takes the place of `#[test]`. Each tag is
+the crate whose Contract it is. It makes the function a test, or goes beside
+the test attribute already there, such as `#[test]` or `#[tokio::test]`. Each tag is
 checked against the crate's `contract/` as the test compiles, so a wrong tag
 is a compile error.
 
@@ -34,8 +35,17 @@ is a compile error.
 - **kind:** security
 - **status:** active
 
+### A6 — It keeps the test attribute already there
+- **must:** run a function once as a test when it also carries a test attribute, `#[test]` or one whose path ends in `test` such as `#[tokio::test]`, above or below `#[impish::contract(…)]`
+- **why:** adopting impish in existing tests should take one added line, not a rewrite of each test's attributes
+- **kind:** functional
+- **status:** active
+
 ```covers
 impish/src/lib.rs::contract
+impish/src/lib.rs::is_test
+impish/src/lib.rs::has_test
+impish/src/lib.rs::tested_in_source
 ```
 
 ```surface

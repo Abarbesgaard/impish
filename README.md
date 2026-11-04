@@ -71,12 +71,24 @@ src/lib.rs::add
 ```
 ````
 
-Prove each obligation in `tests/contract/<primitive>.rs`. The attribute takes
-the place of `#[test]` and names the obligations the test proves:
+Prove each obligation in `tests/contract/<primitive>.rs`. The attribute names
+the obligations the test proves, and on its own makes the function a test:
 
 ```rust
 #[impish::contract("add/A1")]
 fn adds() {
+    assert_eq!(calc::add(2, 3), 5);
+}
+```
+
+A test that already has `#[test]`, `#[tokio::test]` or another attribute whose
+path ends in `test` keeps it. Add the line under it, and the test still runs
+once:
+
+```rust
+#[tokio::test]
+#[impish::contract("add/A1")]
+async fn adds_later() {
     assert_eq!(calc::add(2, 3), 5);
 }
 ```
@@ -118,7 +130,7 @@ The Contract is not met.
 
 | Message | Fix |
 | --- | --- |
-| `<test> names no obligation` | Replace `#[test]` with `#[impish::contract("<primitive>/A<n>")]`. Every test in `tests/contract/` proves something, or it belongs elsewhere. |
+| `<test> names no obligation` | Add `#[impish::contract("<primitive>/A<n>")]` under its `#[test]`. Every test in `tests/contract/` proves something, or it belongs elsewhere. |
 | `<primitive>/A<n> has no test` | Write a test that proves it, or retire the obligation if it's no longer a promise. |
 | `contract/coverage.json is out of date` | Run `cargo impish check --write` and commit the result. |
 | `…: covers <file>::<fn>, which doesn't exist` | The function was renamed or moved. Update the covers block. |

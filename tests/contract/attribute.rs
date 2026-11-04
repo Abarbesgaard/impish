@@ -134,3 +134,46 @@ fn unnamed() {}
     }
     assert!(!text.contains("`p-1_x/A1`"), "{text}");
 }
+
+#[impish::contract("attribute/A6")]
+fn a_test_attribute_already_there_is_kept() {
+    let out = Crate::with_tests(
+        r#"
+#[test]
+#[impish::contract("p/A1")]
+fn below_test() {}
+
+#[impish::contract("p/A1")]
+#[test]
+fn above_test() {}
+
+#[::core::prelude::v1::test]
+#[impish::contract("p/A1")]
+fn below_a_path() {}
+
+#[impish::contract("p/A1")]
+#[::core::prelude::v1::test]
+fn above_a_path() {}
+
+#[impish::contract("p/A1")]
+fn alone() {}
+
+mod shadow {
+    #[impish::contract("p/A1")]
+    fn below_test() {
+        assert!(true);
+    }
+
+    #[test]
+    #[impish::contract("p/A1")]
+    fn nested() {}
+}
+"#,
+    )
+    .write("contract/p/README.md", &readme(&["A1"]))
+    .test();
+    let text = out.text();
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("running 7 tests"), "{text}");
+    assert!(!text.contains("duplicated attribute"), "{text}");
+}

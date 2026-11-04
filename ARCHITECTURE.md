@@ -39,10 +39,11 @@ runs a test. `cargo test` runs them, and the attribute ties the two together.
 ## impish (the attribute)
 
 A proc-macro crate with one export, `#[impish::contract("<primitive>/A<n>", …)]`.
-It takes the place of `#[test]` and checks each tag against
+It makes the function a test, or goes beside a test attribute already there
+such as `#[test]` or `#[tokio::test]`, and checks each tag against
 `contract/<primitive>/README.md` while the test compiles, so a wrong tag is a
 compile error on that tag. It reports through `compile_error!`, never by
-printing or panicking. ([0002](docs/decisions/0002-tags-are-an-attribute-checked-at-compile-time.md))
+printing or panicking. ([0002](docs/decisions/0002-tags-are-an-attribute-checked-at-compile-time.md), [0010](docs/decisions/0010-the-attribute-goes-beside-the-test-attribute.md))
 
 ## The Contract
 

@@ -1,6 +1,7 @@
 [package]
 name = "impish"
 version.workspace = true
+rust-version = "1.88"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
