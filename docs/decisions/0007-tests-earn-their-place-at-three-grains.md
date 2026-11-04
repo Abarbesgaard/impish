@@ -1,6 +1,6 @@
 # 0007 — Tests earn their place, per line, per obligation and per test
 
-**Status:** accepted (#16 and the PR that added this record)
+**Status:** accepted (#16 and the PR that added this record); the per-obligation grain is superseded by [0011](0011-mutate-is-strict.md)
 
 ## Decision
 

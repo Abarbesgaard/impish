@@ -24,8 +24,12 @@ Dependencies point inwards: `cargo-impish` and `impish` both depend on
 src/
   main.rs       parses the command line (clap) and finds the nearest contract/
   check.rs      `cargo impish check`: holds the Contract to its tests, writes coverage
-  mutate.rs     `cargo impish mutate`: a kill matrix per obligation, via cargo-mutants
-  contract.rs   reads covers and surface blocks, and #[impish::contract] tags with syn
+  mutate.rs     `cargo impish mutate`: a kill matrix per obligation, via cargo-mutants;
+                every mutant caught or declared in mutants.md
+  mutate/
+    scratch.rs  the copy of the project mutate breaks, one mutant at a time
+  contract.rs   reads covers and surface blocks, mutants.md declarations, and
+                #[impish::contract] tags with syn
 ```
 
 `main` calls the commands; `check` and `mutate` both build on `contract`, never

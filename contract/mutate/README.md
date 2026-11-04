@@ -8,10 +8,16 @@ are the `contract` test target, `tests/contract/main.rs`, filtered to
 that failed, and the kill matrix shows, per obligation, how many mutants its
 tests caught and how many only its tests caught.
 
+Every mutant must be caught. One that no contract test catches, whether it
+survives or times out, fails the run unless `contract/<primitive>/mutants.md`
+declares it: `equivalent` when no program could tell it from the original,
+`unpromised` when its behaviour changes and the Contract leaves that open
+([0011](../../docs/decisions/0011-mutate-is-strict.md)).
+
 ## Obligations
 
 ### A1 — Kills are credited to obligations
-- **must:** print each mutant with the active obligations whose tests caught it, or `SURVIVED` when none did, then each active obligation's killed and unique counts, and exit 0 when every active obligation catches a mutant
+- **must:** print each mutant with the active obligations whose tests caught it, or `SURVIVED` when none did, then each active obligation's killed and unique counts
 - **kind:** functional
 - **status:** active
 
@@ -47,10 +53,24 @@ tests caught and how many only its tests caught.
 - **kind:** functional
 - **status:** active
 
+### A8 — Every mutant is caught or declared
+- **must:** fail, naming each mutant of the covered code that no contract test catches, whether it survives or times out, unless `contract/<primitive>/mutants.md` declares it
+- **why:** a survivor is code the Contract claims but doesn't specify (rules 20, 26; #25)
+- **kind:** functional
+- **status:** active
+
+### A9 — Declarations are checked
+- **must:** fail, naming each declared mutant a contract test catches, each declaration that matches no mutant, and each declaration block with no `##` heading giving its reason; and stop, undecided, when `mutants.md` exists but can't be read
+- **why:** a stale or contradicted declaration hides a mutant the Contract does catch, or a reason nobody wrote down
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate.rs::report
-src/mutate.rs::mutated
+src/mutate.rs::key
+src/contract.rs::declarations
+src/mutate/scratch.rs::mutated
 ```
 
 ```surface

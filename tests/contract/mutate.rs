@@ -1,12 +1,14 @@
 use std::time::{Duration, SystemTime};
 
-use crate::harness::calc_crate;
+use crate::harness::{NOT_MET, calc_crate};
 
 const ADDS: &str = "#[impish::contract(\"calc/A1\")]\n\
                     fn adds() {\n    assert_eq!(calc::add(2, 3), 5);\n}\n\n";
 // double(2) is also 2 + 2, so `*` → `+` survives.
 const DOUBLES: &str = "#[impish::contract(\"calc/A2\")]\n\
                        fn doubles() {\n    assert_eq!(calc::double(2), 4);\n}\n";
+const DOUBLES_EVERY_WAY: &str = "#[impish::contract(\"calc/A2\")]\n\
+                                 fn doubles() {\n    assert_eq!(calc::double(3), 6);\n}\n";
 const DOUBLES_NOTHING: &str = "#[impish::contract(\"calc/A2\")]\n\
                                fn doubles() {\n    let _ = calc::double(3);\n}\n";
 
@@ -17,7 +19,6 @@ fn kills_are_credited_to_the_obligations_that_caught_them() {
 
     let out = p.mutate("calc");
 
-    assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
     assert!(
         out.stdout
             .contains("src/lib.rs:2:7: replace + with - in add  killed by calc/A1\n"),
@@ -74,7 +75,7 @@ fn the_kill_matrix_says_what_unique_means() {
 
 #[impish::contract("mutate/A7")]
 fn each_run_tests_the_code_as_it_is() {
-    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    let p = calc_crate(&format!("{ADDS}{DOUBLES_EVERY_WAY}"));
     // Files older than any build, as a checkout often is, so only their
     // content can tell Cargo the code changed back.
     let age = || p.age(SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000_000));
@@ -94,9 +95,11 @@ fn a_hollow_obligation_fails_by_name() {
     let out = calc_crate(&format!("{ADDS}{DOUBLES_NOTHING}")).mutate("calc");
 
     assert_eq!(out.code, Some(1), "{}", out.stdout);
-    assert_eq!(
-        out.stderr,
-        "calc/A2 is hollow: its tests catch none of the mutants\nThe Contract is not met.\n"
+    assert!(
+        out.stderr
+            .starts_with("calc/A2 is hollow: its tests catch none of the mutants\n"),
+        "{}",
+        out.stderr
     );
 }
 
@@ -130,6 +133,169 @@ fn nothing_to_mutate_fails() {
     assert!(
         out.stderr
             .contains("contract/calc/README.md covers no code, so there is nothing to mutate"),
+        "{}",
+        out.stderr
+    );
+}
+
+const SURVIVOR: &str = "src/lib.rs: replace * with + in double";
+
+/// A mutants.md declaring `names` as `kind`, under a heading giving the
+/// reason. The blank line in the block declares nothing.
+fn declaring(kind: &str, names: &[&str]) -> String {
+    format!(
+        "# Mutants calc leaves alone\n\n## Doubling two is adding two\n\n```{kind}\n{}\n\n```\n",
+        names.join("\n")
+    )
+}
+
+#[impish::contract("mutate/A8")]
+fn a_survivor_fails_by_name() {
+    let out = calc_crate(&format!("{ADDS}{DOUBLES}")).mutate("calc");
+
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    assert_eq!(
+        out.stderr,
+        format!(
+            "{SURVIVOR} survived: catch it in a contract test, \
+             or declare it in contract/calc/mutants.md\n{NOT_MET}\n"
+        )
+    );
+}
+
+#[impish::contract("mutate/A8")]
+fn a_declared_survivor_passes() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    p.write(
+        "contract/calc/mutants.md",
+        &declaring("unpromised", &[SURVIVOR]),
+    );
+
+    let out = p.mutate("calc");
+
+    assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains(
+            "src/lib.rs:6:7: replace * with + in double  SURVIVED, declared unpromised\n"
+        ),
+        "{}",
+        out.stdout
+    );
+}
+
+#[impish::contract("mutate/A8")]
+fn every_mutant_caught_passes() {
+    let out = calc_crate(&format!("{ADDS}{DOUBLES_EVERY_WAY}")).mutate("calc");
+
+    assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
+    assert!(!out.stdout.contains("SURVIVED"), "{}", out.stdout);
+    assert!(
+        out.stdout
+            .ends_with("\nEvery mutant of calc is caught or declared.\n"),
+        "{}",
+        out.stdout
+    );
+}
+
+#[impish::contract("mutate/A8")]
+fn a_timed_out_mutant_fails_by_name() {
+    let p = calc_crate(
+        "#[impish::contract(\"calc/A1\", \"calc/A2\")]\n\
+         fn counts() {\n    assert_eq!(calc::count(3), 3);\n}\n",
+    );
+    // `i *= 1` never reaches n, so that mutant loops until it is stopped.
+    p.write(
+        "src/lib.rs",
+        "pub fn count(n: u32) -> u32 {\n    let mut i = 0;\n    while i < n {\n        i += 1;\n    }\n    i\n}\n",
+    );
+    let readme = p.read("contract/calc/README.md");
+    let covers = readme.find("```covers").expect("a covers block");
+    p.write(
+        "contract/calc/README.md",
+        &format!("{}```covers\nsrc/lib.rs::count\n```\n", &readme[..covers]),
+    );
+
+    let out = p.mutate("calc");
+
+    assert_eq!(out.code, Some(1), "{}{}", out.stdout, out.stderr);
+    assert_eq!(
+        out.stderr,
+        format!(
+            "src/lib.rs: replace += with *= in count timed out: catch it in a contract test, \
+             or declare it in contract/calc/mutants.md\n{NOT_MET}\n"
+        )
+    );
+}
+
+#[impish::contract("mutate/A9")]
+fn a_caught_declaration_fails() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES_EVERY_WAY}"));
+    p.write(
+        "contract/calc/mutants.md",
+        &declaring("equivalent", &["src/lib.rs: replace + with - in add"]),
+    );
+
+    let out = p.mutate("calc");
+
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    assert_eq!(
+        out.stderr,
+        format!(
+            "contract/calc/mutants.md:6: src/lib.rs: replace + with - in add is declared \
+             equivalent, but calc/A1 catches it\n{NOT_MET}\n"
+        )
+    );
+}
+
+#[impish::contract("mutate/A9")]
+fn a_declaration_matching_no_mutant_fails() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES_EVERY_WAY}"));
+    p.write(
+        "contract/calc/mutants.md",
+        &declaring("unpromised", &["src/lib.rs: replace / with * in add"]),
+    );
+
+    let out = p.mutate("calc");
+
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    assert_eq!(
+        out.stderr,
+        format!(
+            "contract/calc/mutants.md:6: src/lib.rs: replace / with * in add matches no mutant\n{NOT_MET}\n"
+        )
+    );
+}
+
+#[impish::contract("mutate/A9")]
+fn a_declaration_without_a_reason_fails() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    p.write(
+        "contract/calc/mutants.md",
+        &format!("# Mutants calc leaves alone\n\n```unpromised\n{SURVIVOR}\n```\n"),
+    );
+
+    let out = p.mutate("calc");
+
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    assert_eq!(
+        out.stderr,
+        format!(
+            "contract/calc/mutants.md:3: an unpromised block with no ## heading giving its reason\n{NOT_MET}\n"
+        )
+    );
+    assert!(out.stdout.is_empty(), "nothing is mutated: {}", out.stdout);
+}
+
+#[impish::contract("mutate/A9")]
+fn an_unreadable_declaration_file_stops_the_run() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    p.write("contract/calc/mutants.md/keep", "");
+
+    let out = p.mutate("calc");
+
+    assert_eq!(out.code, Some(2), "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stderr.contains("read contract/calc/mutants.md"),
         "{}",
         out.stderr
     );
