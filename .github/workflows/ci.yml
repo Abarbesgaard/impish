@@ -174,7 +174,7 @@ jobs:
     name: Version
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -182,13 +182,18 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      # What ships is what `cargo package` puts in the crates, README included,
+      # so a green merge of any change users get is a release.
       # Dependabot can't bump the version, so its updates ship with the next release.
       - name: A change to what ships bumps the version
         env:
           BASE_REF: ${{ github.base_ref }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
-          shipped=$(git diff --name-only "origin/${BASE_REF}..." -- src core impish Cargo.toml Cargo.lock)
+          scripts/shipped.sh > "$RUNNER_TEMP/shipped"
+          mapfile -t paths < "$RUNNER_TEMP/shipped"
+          shipped=$(git diff --name-only "origin/${BASE_REF}..." -- "${paths[@]}")
           if [ -z "$shipped" ] || [ "$AUTHOR" = "dependabot[bot]" ]; then
             echo "Nothing that ships changed, or this is Dependabot; no bump needed."
             exit 0
