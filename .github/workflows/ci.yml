@@ -37,6 +37,10 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The gates' own scripts, against fakes of the slow tools: a gate that
+      # can't fail is caught here, not on a PR that should have failed.
+      - name: Pipeline scripts
+        run: tests/pipeline/run.sh
 
   test:
     name: Test

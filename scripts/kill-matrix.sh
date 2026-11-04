@@ -25,7 +25,7 @@ set -euo pipefail
 out="${KILLMX_OUT:-/tmp/impish-killmx}"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-4}" RUST_TEST_THREADS="${RUST_TEST_THREADS:-4}"
 # Tests that check structure, not behaviour: they kill nothing by design.
-no_kills_expected='^(architecture/|contract/the_attribute_made_the_contract_tests$)'
+no_kills_expected='^(architecture/|suite/the_attribute_made_every_contract_test$)'
 max_new_issues=3
 
 mkdir -p "$out"
