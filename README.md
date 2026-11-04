@@ -3,7 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/cargo-impish.svg)](https://crates.io/crates/cargo-impish)
 [![docs.rs](https://img.shields.io/docsrs/impish)](https://docs.rs/impish)
 [![CI](https://github.com/Abarbesgaard/impish/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Abarbesgaard/impish/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/crates/l/cargo-impish.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/crates/l/cargo-impish.svg)](https://github.com/Abarbesgaard/impish/blob/main/LICENSE)
 
 The Contract gate for Rust, after [Impatient Programming](https://impatientprogramming.org).
 A sibling of [flinch](https://github.com/tools4imps/flinch) (Go) and
@@ -187,7 +187,7 @@ surface, put a command that prints it in `impish.toml`:
 command = ["sh", "scripts/surface.sh"]
 ```
 
-impish holds itself to its own Contract: [contract/README.md](contract/README.md)
+impish holds itself to its own Contract: [contract/README.md](https://github.com/Abarbesgaard/impish/blob/main/contract/README.md)
 describes the format in full, and each `contract/<primitive>/README.md` is a
 working example.
 
@@ -270,14 +270,14 @@ jobs:
       - run: cargo impish mutate "${{ matrix.primitive }}"
 ```
 
-impish's own [CI](.github/workflows/ci.yml) and
-[kill matrix](.github/workflows/kill-matrix.yml) go further: pinned actions, sharding and a per-test matrix.
+impish's own [CI](https://github.com/Abarbesgaard/impish/blob/main/.github/workflows/ci.yml) and
+[kill matrix](https://github.com/Abarbesgaard/impish/blob/main/.github/workflows/kill-matrix.yml) go further: pinned actions, sharding and a per-test matrix.
 
 ## Contributing
 
-[ARCHITECTURE.md](ARCHITECTURE.md) says where each part lives and which
-guardrails fire on a change; [docs/decisions](docs/decisions/) says why.
+[ARCHITECTURE.md](https://github.com/Abarbesgaard/impish/blob/main/ARCHITECTURE.md) says where each part lives and which
+guardrails fire on a change; [docs/decisions](https://github.com/Abarbesgaard/impish/tree/main/docs/decisions/) says why.
 
 ## License
 
-MIT; see [LICENSE](LICENSE).
+MIT; see [LICENSE](https://github.com/Abarbesgaard/impish/blob/main/LICENSE).
