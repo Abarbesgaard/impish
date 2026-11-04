@@ -573,3 +573,30 @@ fn check_leaves_the_crate_as_it_was() {
     assert_eq!(p.check().code, Some(1));
     assert_eq!(p.files(), before, "a failing check changed the crate");
 }
+
+#[impish::contract("check/A24")]
+fn json_reports_what_the_text_does() {
+    let p = calc(&["A1", "A2"], &test_fn("adds", &["calc/A1"]));
+
+    let out = p.run(&["check", "--format", "json"]);
+
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    assert_eq!(out.stderr, "");
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["version"], 1);
+    assert_eq!(doc["met"], false);
+    assert_eq!(doc["obligations"], 2);
+    assert_eq!(doc["primitives"], 1);
+    assert_eq!(doc["problems"], serde_json::json!(["calc/A2 has no test"]));
+    assert_eq!(doc["coverage"]["primitives"]["calc"]["obligations"], 2);
+
+    p.write(
+        "tests/contract/calc.rs",
+        &test_fn("adds", &["calc/A1", "calc/A2"]),
+    );
+    let out = p.run(&["check", "--format", "json"]);
+    assert_eq!(out.code, Some(0), "{}", out.stdout);
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["met"], true);
+    assert_eq!(doc["problems"], serde_json::json!([]));
+}

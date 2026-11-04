@@ -72,9 +72,17 @@ must catch at least one mutant too.
 - **kind:** functional
 - **status:** active
 
+### A11 — --format json reports as JSON
+- **must:** with `--format json`, print one JSON document on stdout, with `version` 1, whether the Contract is `met`, every mutant's name, outcome, the obligations and tests that caught it and any declaration, the counts per outcome, the kill matrix, and every problem the text names; write nothing to stderr, and exit as the text does
+- **why:** CI reads results, not prose (#30)
+- **kind:** persisted-format
+- **status:** active
+
 ```covers
 src/mutate.rs::run
-src/mutate.rs::report
+src/mutate.rs::finish
+src/mutate/judge.rs::judge
+src/mutate/judge.rs::json
 src/mutate.rs::key
 src/contract.rs::declarations
 src/mutate/scratch.rs::mutated

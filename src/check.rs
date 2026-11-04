@@ -103,16 +103,33 @@ fn coverage(report: &Report) -> Value {
     value
 }
 
-pub fn run(root: &Path, write: bool) -> anyhow::Result<ExitCode> {
+pub fn run(root: &Path, write: bool, json: bool) -> anyhow::Result<ExitCode> {
     let mut report = check(root)?;
     let path = root.join("contract/coverage.json");
-    let text = serde_json::to_string_pretty(&coverage(&report))? + "\n";
+    let published = coverage(&report);
+    let text = serde_json::to_string_pretty(&published)? + "\n";
     if write {
         fs::write(&path, text).context("write contract/coverage.json")?;
     } else if path.exists() && fs::read_to_string(&path)? != text {
         report.problems.push(
             "contract/coverage.json is out of date; run `cargo impish check --write`".to_string(),
         );
+    }
+    if json {
+        let doc = json!({
+            "version": 1,
+            "met": report.problems.is_empty(),
+            "obligations": report.obligations,
+            "primitives": report.primitives,
+            "problems": report.problems,
+            "coverage": published,
+        });
+        println!("{doc}");
+        return Ok(if report.problems.is_empty() {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        });
     }
     if report.problems.is_empty() {
         println!(

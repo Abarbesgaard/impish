@@ -128,6 +128,12 @@ exit code is 2 (cli/A3).
 - **kind:** functional
 - **status:** active
 
+### A24 — --format json reports as JSON
+- **must:** with `--format json`, print one JSON document on stdout, with `version` 1, whether the Contract is `met`, the counts of obligations and primitives, every problem the text names and the coverage `--write` publishes; write nothing to stderr, and exit as the text does
+- **why:** CI reads results, not prose (#30)
+- **kind:** persisted-format
+- **status:** active
+
 ```covers
 src/check.rs::run
 src/check.rs::check

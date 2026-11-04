@@ -11,8 +11,10 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, anyhow, bail};
 use serde::Deserialize;
 
+mod judge;
 mod scratch;
 
+use judge::{Verdict, judge};
 use scratch::Scratch;
 
 use crate::contract::{Declared, covers, declarations, tagged_tests};
@@ -58,7 +60,7 @@ enum Outcome {
     TimedOut,
 }
 
-pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
+pub fn run(root: &Path, primitive: &str, json: bool) -> anyhow::Result<ExitCode> {
     let readme_file = format!("contract/{primitive}/README.md");
     let readme =
         fs::read_to_string(root.join(&readme_file)).with_context(|| format!("no {readme_file}"))?;
@@ -84,13 +86,19 @@ pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
     };
     let (declared, unreasoned) = declarations(&declared_text);
     if !unreasoned.is_empty() {
-        for (line, kind) in unreasoned {
-            eprintln!(
-                "{declared_file}:{line}: an {kind} block with no ## heading giving its reason"
-            );
-        }
-        eprintln!("The Contract is not met.");
-        return Ok(ExitCode::FAILURE);
+        let problems = unreasoned
+            .into_iter()
+            .map(|(line, kind)| {
+                format!(
+                    "{declared_file}:{line}: an {kind} block with no ## heading giving its reason"
+                )
+            })
+            .collect();
+        let verdict = Verdict {
+            problems,
+            ..Verdict::default()
+        };
+        return Ok(finish(primitive, &[], &declared, &verdict, json));
     }
     let tests_file = format!("tests/contract/{primitive}.rs");
     let tests =
@@ -122,12 +130,14 @@ pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
         );
     }
     let timeout = started.elapsed() * 5 + Duration::from_secs(10);
-    println!(
-        "{primitive}: {} mutants of {} functions, {} tests",
-        mutants.len(),
-        targets.len(),
-        tags.len()
-    );
+    if !json {
+        println!(
+            "{primitive}: {} mutants of {} functions, {} tests",
+            mutants.len(),
+            targets.len(),
+            tags.len()
+        );
+    }
 
     let mut outcomes = Vec::new();
     for mutant in &mutants {
@@ -148,19 +158,15 @@ pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
         {
             verdict = format!("{verdict}, declared {}", d.kind);
         }
-        println!("  {}  {verdict}", mutant.name);
+        if !json {
+            println!("  {}  {verdict}", mutant.name);
+        }
         outcomes.push(outcome);
     }
     let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
     let tests: Vec<&str> = tags.keys().map(String::as_str).collect();
-    Ok(report(
-        primitive,
-        &active,
-        &tests,
-        &tried,
-        &declared,
-        &declared_file,
-    ))
+    let verdict = judge(&active, &tests, &tried, &declared, &declared_file);
+    Ok(finish(primitive, &tried, &declared, &verdict, json))
 }
 
 /// The mutant's name without line and column, as mutants.md declares it.
@@ -172,96 +178,51 @@ fn key(m: &Mutant) -> String {
     format!("{}: {rest}", m.file)
 }
 
-/// The kill matrix, then why the Contract isn't met: hollow obligations,
-/// blind tests, mutants no contract test catches, and declarations that
-/// don't hold.
-fn report(
+/// Reports the verdict, as JSON or as the kill matrix and the problems.
+fn finish(
     primitive: &str,
-    active: &[String],
-    tests: &[&str],
     tried: &[(&Mutant, &Outcome)],
     declared: &[Declared],
-    declared_file: &str,
+    v: &Verdict,
+    json: bool,
 ) -> ExitCode {
-    let outcomes: Vec<&Outcome> = tried.iter().map(|(_, o)| *o).collect();
-    let count = |f: fn(&Outcome) -> bool| outcomes.iter().filter(|o| f(o)).count();
-    println!(
-        "\n{} killed, {} survived, {} timed out, {} unviable",
-        count(|o| matches!(o, Outcome::Killed { .. })),
-        count(|o| matches!(o, Outcome::Survived)),
-        count(|o| matches!(o, Outcome::TimedOut)),
-        count(|o| matches!(o, Outcome::Unviable)),
-    );
-    let width = active.iter().map(String::len).max().unwrap_or(0).max(10);
-    println!("\n  {:width$}  killed  unique", "obligation");
-    let mut problems = Vec::new();
-    for id in active {
-        let mut killed = 0;
-        let mut unique = 0;
-        for by in outcomes.iter().filter_map(|o| match o {
-            Outcome::Killed { by, .. } if by.contains(id) => Some(by),
-            _ => None,
-        }) {
-            killed += 1;
-            unique += usize::from(by.len() == 1);
-        }
-        println!("  {id:width$}  {killed:>6}  {unique:>6}");
-        if killed == 0 {
-            problems.push(format!(
-                "{id} is hollow: its tests catch none of the mutants"
-            ));
-        }
+    let code = if v.problems.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    };
+    if json {
+        println!("{}", judge::json(primitive, tried, declared, v));
+        return code;
     }
-    println!("  unique: caught by no other obligation's tests.");
-    println!("  Tests outside the Contract weren't run; they may catch it too.");
-    for test in tests {
-        let catches = outcomes
+    if !tried.is_empty() {
+        println!(
+            "\n{} killed, {} survived, {} timed out, {} unviable",
+            v.killed, v.survived, v.timed_out, v.unviable
+        );
+        let width = v
+            .rows
             .iter()
-            .any(|o| matches!(o, Outcome::Killed { tests, .. } if tests.contains(*test)));
-        if !catches {
-            problems.push(format!("{test} is blind: it catches none of the mutants"));
+            .map(|(id, ..)| id.len())
+            .max()
+            .unwrap_or(0)
+            .max(10);
+        println!("\n  {:width$}  killed  unique", "obligation");
+        for (id, killed, unique) in &v.rows {
+            println!("  {id:width$}  {killed:>6}  {unique:>6}");
         }
+        println!("  unique: caught by no other obligation's tests.");
+        println!("  Tests outside the Contract weren't run; they may catch it too.");
     }
-    for (mutant, outcome) in tried {
-        let what = match outcome {
-            Outcome::Survived => "survived",
-            Outcome::TimedOut => "timed out",
-            _ => continue,
-        };
-        let name = key(mutant);
-        if !declared.iter().any(|d| d.name == name) {
-            problems.push(format!(
-                "{name} {what}: catch it in a contract test, or declare it in {declared_file}"
-            ));
-        }
-    }
-    for d in declared {
-        let mut by = BTreeSet::new();
-        let mut matched = false;
-        for (_, outcome) in tried.iter().filter(|(m, _)| key(m) == d.name) {
-            matched = true;
-            if let Outcome::Killed { by: ids, .. } = outcome {
-                by.extend(ids.iter().map(String::as_str));
-            }
-        }
-        let at = format!("{declared_file}:{}: {}", d.line, d.name);
-        if !matched {
-            problems.push(format!("{at} matches no mutant"));
-        } else if !by.is_empty() {
-            let verb = if by.len() == 1 { "catches" } else { "catch" };
-            let by = by.into_iter().collect::<Vec<_>>().join(", ");
-            problems.push(format!("{at} is declared {}, but {by} {verb} it", d.kind));
-        }
-    }
-    if problems.is_empty() {
+    if v.problems.is_empty() {
         println!("\nEvery mutant of {primitive} is caught or declared.");
-        return ExitCode::SUCCESS;
+        return code;
     }
-    for problem in problems {
+    for problem in &v.problems {
         eprintln!("{problem}");
     }
     eprintln!("The Contract is not met.");
-    ExitCode::FAILURE
+    code
 }
 
 /// The mutants cargo-mutants makes of the covered functions, in its order.

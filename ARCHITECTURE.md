@@ -28,6 +28,7 @@ src/
                 every mutant caught or declared in mutants.md
   mutate/
     scratch.rs  the copy of the project mutate breaks, one mutant at a time
+    judge.rs    the verdict on the mutants, and its JSON document
   contract.rs   reads covers and surface blocks, mutants.md declarations, and
                 #[impish::contract] tags with syn
 ```
