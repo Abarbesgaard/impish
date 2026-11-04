@@ -13,4 +13,9 @@ cargo metadata --no-deps --format-version 1 |
   done |
   # A member's Cargo.lock is the workspace's.
   sed 's#^.*/Cargo\.lock$#Cargo.lock#' |
+  # A readme from outside the crate's directory is listed under it; it ships
+  # from where it really is, which another crate lists.
+  while read -r path; do
+    if [ -e "$path" ]; then echo "$path"; fi
+  done |
   sort -u
