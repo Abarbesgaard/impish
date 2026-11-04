@@ -1,14 +1,14 @@
 {
   "kinds": {
-    "functional": 29,
+    "functional": 30,
     "non-functional": 1,
     "persisted-format": 1,
     "security": 2
   },
-  "obligations": 33,
+  "obligations": 34,
   "primitives": {
     "attribute": {
-      "obligations": 5,
+      "obligations": 6,
       "surface": [
         "attribute impish::contract"
       ]
