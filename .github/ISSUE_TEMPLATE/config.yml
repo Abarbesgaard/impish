@@ -1,0 +1,13 @@
+# Every issue starts from a Contract (IMP rules 1, 20 and 28), so there are no
+# blank issues; the forms in this folder ask for the obligations.
+blank_issues_enabled: false
+contact_links:
+  - name: Why issues are written as obligations
+    url: https://impatientprogramming.org/rules/#rule-20
+    about: Impatient Programming, rule 20 - agree on the Contract, and make it executable.
+  - name: impish's Contract
+    url: https://github.com/Abarbesgaard/impish/blob/main/contract/README.md
+    about: The obligations impish already promises, one folder per primitive, and the format they're written in.
+  - name: Questions and usage help
+    url: https://github.com/Abarbesgaard/impish#readme
+    about: How to set up a Contract, what each message means, and how to run impish in CI.

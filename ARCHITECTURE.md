@@ -75,6 +75,7 @@ merges itself (rule 27).
 | No new near-duplicate functions | CI `similar`, `scripts/similar-code.sh` |
 | A change to what ships (`scripts/shipped.sh`) bumps the version | CI `version` ([0006](docs/decisions/0006-every-green-merge-is-a-release.md)) |
 | PR titles are `fix:` (with `bug`) or `refine:` (rule 9) | `pr-title.yml` |
+| Issues start from obligations: Refinement and Bug forms, no blank issues (rules 1, 20, 28) | `.github/ISSUE_TEMPLATE/` ([0009](docs/decisions/0009-every-issue-starts-from-a-contract.md)) |
 | Tests that catch nothing another test doesn't | nightly `kill-matrix.yml`, `scripts/kill-matrix.sh` ([0007](docs/decisions/0007-tests-earn-their-place-at-three-grains.md)) |
 
 On `main`, the `Release` job publishes every new version.

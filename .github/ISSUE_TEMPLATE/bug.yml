@@ -1,0 +1,121 @@
+name: Bug
+description: A defect in a released version of impish. The fix starts with the obligation the Contract was missing.
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        impish follows [Impatient Programming](https://impatientprogramming.org) (IMP). In IMP a bug means impish's [Contract](https://github.com/Abarbesgaard/impish/blob/main/contract/README.md) was missing something.
+
+        - **What counts as a bug?** [Rule 9](https://impatientprogramming.org/rules/#rule-9): a defect in a released version, on [crates.io](https://crates.io/crates/cargo-impish) or under [releases](https://github.com/Abarbesgaard/impish/releases). Something only on `main` is a refinement; use the **Refinement** form.
+        - **How it's fixed.** [Rule 28](https://impatientprogramming.org/rules/#rule-28): the missing obligation goes into the Contract first, as a contract test that fails on the released code ([rule 20](https://impatientprogramming.org/rules/#rule-20)) and catches the mutant that matches the bug, which `cargo impish mutate` shows ([rule 26](https://impatientprogramming.org/rules/#rule-26)). Only then does the code change. Every bug leaves the Contract stronger.
+
+        So below, besides what went wrong, say what impish should have promised.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `cargo impish --version`, and the `impish` version in your Cargo.lock if it differs.
+      placeholder: cargo impish 0.6.3
+    validations:
+      required: true
+  - type: input
+    id: toolchain
+    attributes:
+      label: Toolchain
+      description: The output of `cargo --version`, and of `cargo mutants --version` if this is about `cargo impish mutate`.
+      placeholder: cargo 1.98.0, cargo-mutants 27.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed from
+      options:
+        - crates.io (cargo install cargo-impish)
+        - git (cargo install --git)
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 26.1, Ubuntu 24.04, Windows 11
+    validations:
+      required: true
+  - type: dropdown
+    id: primitive
+    attributes:
+      label: Primitive
+      description: |
+        Which part of impish went wrong? Each primitive is a folder under [contract/](https://github.com/Abarbesgaard/impish/tree/main/contract):
+        `attribute` is `#[impish::contract]` (a compile error, or a test that doesn't run), `check` is `cargo impish check`, `cli` is how impish is invoked, `mutate` is `cargo impish mutate`.
+      options:
+        - attribute
+        - check
+        - cli
+        - mutate
+        - None yet
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: |
+        The smallest crate that shows it, from `cargo new --lib repro`: the contents of `contract/<primitive>/README.md`, `tests/contract/main.rs` and `tests/contract/<primitive>.rs`, and any `impish.toml`, then the exact commands. A gist or repository link works too.
+      placeholder: |
+        cargo new --lib repro && cd repro
+        cargo add --dev impish
+        mkdir -p contract/calc tests/contract
+        # contract/calc/README.md:
+        #   ...
+        # tests/contract/calc.rs:
+        #   ...
+        cargo test
+        cargo impish check
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Paste the output and any error, as printed, including the exit code (`echo $?`).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened
+      description: If an existing obligation already promises this, name it (e.g. `check/A9`); then the bug is that its tests let this through.
+    validations:
+      required: true
+  - type: textarea
+    id: obligation
+    attributes:
+      label: The missing obligation
+      description: |
+        What impish should have promised, in the [Contract's format](https://github.com/Abarbesgaard/impish/blob/main/contract/README.md), so a contract test written from it fails on the version above. Describe the behaviour, not the code that went wrong. A rough version is fine; it's sharpened when the test is written.
+      value: |
+        ### A1 — <a short name for the promise>
+        - **must:** <what impish does, observably>
+        - **why:** <optional; e.g. the bug in this issue>
+        - **kind:** functional
+        - **status:** active
+      render: markdown
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: The bug is in a released version ([rule 9](https://impatientprogramming.org/rules/#rule-9)), not only on `main`.
+          required: true
+        - label: I searched the [open issues](https://github.com/Abarbesgaard/impish/issues) for a duplicate.
+          required: true
