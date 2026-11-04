@@ -78,6 +78,17 @@ impl Project {
         out
     }
 
+    /// Sets every file's modification time to `when`.
+    pub fn age(&self, when: std::time::SystemTime) {
+        for path in self.files().keys() {
+            fs::File::options()
+                .write(true)
+                .open(self.0.path().join(path))
+                .and_then(|f| f.set_modified(when))
+                .unwrap();
+        }
+    }
+
     pub fn read(&self, rel: &str) -> String {
         fs::read_to_string(self.0.path().join(rel)).unwrap()
     }

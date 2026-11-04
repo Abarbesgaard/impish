@@ -1,3 +1,5 @@
+use std::time::{Duration, SystemTime};
+
 use crate::harness::calc_crate;
 
 const ADDS: &str = "#[impish::contract(\"calc/A1\")]\n\
@@ -68,6 +70,23 @@ fn the_kill_matrix_says_what_unique_means() {
         "{}",
         out.stdout
     );
+}
+
+#[impish::contract("mutate/A7")]
+fn each_run_tests_the_code_as_it_is() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    // Files older than any build, as a checkout often is, so only their
+    // content can tell Cargo the code changed back.
+    let age = || p.age(SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000_000));
+
+    age();
+    let first = p.mutate("calc");
+    age();
+    let second = p.mutate("calc");
+
+    assert_eq!(first.code, Some(0), "{}", first.stderr);
+    assert_eq!(second.code, first.code, "{}", second.stderr);
+    assert_eq!(second.stdout, first.stdout);
 }
 
 #[impish::contract("mutate/A2")]

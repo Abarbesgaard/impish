@@ -367,7 +367,11 @@ fn copy_dir(from: &Path, to: &Path, top: bool) -> std::io::Result<()> {
         if path.is_dir() {
             copy_dir(&path, &to.join(&name), false)?;
         } else {
-            fs::copy(&path, to.join(&name))?;
+            // Written afresh, not `fs::copy`, which keeps the modification
+            // time on macOS: Cargo would take the copy for older than the
+            // last run's mutant build, and reuse that build.
+            fs::write(to.join(&name), fs::read(&path)?)?;
+            fs::set_permissions(to.join(&name), entry.metadata()?.permissions())?;
         }
     }
     Ok(())
