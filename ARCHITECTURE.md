@@ -30,7 +30,9 @@ src/
 
 `main` calls the commands; `check` and `mutate` both build on `contract`, never
 on each other; `contract` does no I/O. Only the commands read or write files,
-run processes or print, and only `check` reads `impish.toml`.
+run processes or print, and only `check` reads `impish.toml`. `main` prints
+one thing: the error that stopped a run, which exits 2 (undecided), not 1
+(not met).
 
 `check` is static: it reads READMEs and parses test files, and never builds or
 runs a test. `cargo test` runs them, and the attribute ties the two together.

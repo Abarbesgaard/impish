@@ -39,7 +39,16 @@ fn root(cwd: &Path) -> anyhow::Result<&Path> {
         .ok_or_else(|| anyhow::anyhow!("no contract/ in {} or above it", cwd.display()))
 }
 
-fn main() -> anyhow::Result<ExitCode> {
+/// Exit 0 when the Contract holds, 1 when it doesn't, and 2 when impish
+/// couldn't tell.
+fn main() -> ExitCode {
+    run().unwrap_or_else(|e| {
+        eprintln!("Error: {e:?}");
+        ExitCode::from(2)
+    })
+}
+
+fn run() -> anyhow::Result<ExitCode> {
     let mut args: Vec<String> = std::env::args().collect();
     // Cargo runs `cargo impish …` as `cargo-impish impish …`.
     if args.get(1).map(String::as_str) == Some("impish") {

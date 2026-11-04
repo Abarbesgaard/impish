@@ -110,6 +110,16 @@ pub fn test_fn(name: &str, tags: &[&str]) -> String {
 }
 
 /// A README declaring each of `ids` as an obligation.
+pub const NOT_MET: &str = "The Contract is not met.";
+
+/// A project whose calc primitive declares `ids` and has `tests`.
+pub fn calc(ids: &[&str], tests: &str) -> Project {
+    let p = Project::new();
+    p.write("contract/calc/README.md", &readme(ids))
+        .write("tests/contract/calc.rs", tests);
+    p
+}
+
 pub fn readme(ids: &[&str]) -> String {
     let lines: String = ids
         .iter()
