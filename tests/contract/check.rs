@@ -327,6 +327,25 @@ fn a_tag_outside_a_primitive_test_file_fails() {
     );
 }
 
+#[impish::contract("check/A22")]
+fn every_covers_and_surface_block_counts() {
+    let p = with_covers("src/calc.rs::add\n");
+    let readme = p.read("contract/calc/README.md")
+        + "\n```surface\ncli add\n```\n\n```covers\nsrc/calc.rs::sub\n```\n\n```surface\ncli\n```\n";
+    p.write("contract/calc/README.md", &readme);
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    let file = "contract/calc/README.md";
+    assert_eq!(
+        out.stderr,
+        format!(
+            "{file}: covers `src/calc.rs::sub`, which doesn't exist\n\
+             {file}: surface line `cli` is not <kind> <name>\n\
+             {NOT_MET}\n"
+        )
+    );
+}
+
 fn with_surface(lines: &str) -> Project {
     let p = calc(&[], &test_fn("adds", &["calc/A1"]));
     let surface = format!("{}\n```surface\n{lines}```\n", readme(&["A1"]));

@@ -115,6 +115,12 @@ is 1; when the Contract holds the exit code is 0.
 - **kind:** non-functional
 - **status:** active
 
+### A22 — Every covers and surface block counts
+- **must:** read every `covers` and every `surface` block in a README, not only the first of each
+- **why:** a block that is silently skipped is code or surface the Contract claims and nothing checks (#15)
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/check.rs::run
 src/check.rs::check
