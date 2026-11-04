@@ -60,6 +60,9 @@ cli check
 ```
 ````
 
+A README may have several covers or surface blocks, for example one beside
+each obligation; every one is read.
+
 To check those lines against the real surface, give impish a command that
 prints it, one `<kind> <name>` per line, in `impish.toml`:
 

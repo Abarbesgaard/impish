@@ -6,7 +6,7 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{Attribute, ItemFn, LitStr, Token};
 
-/// The `(file, function)` pairs in a README's covers block, or the line that
+/// The `(file, function)` pairs in a README's covers blocks, or the line that
 /// isn't `<file>::<function>`. A README without the block covers nothing.
 pub fn covers(readme: &str) -> Vec<Result<(&str, &str), &str>> {
     block(readme, "covers")
@@ -14,7 +14,7 @@ pub fn covers(readme: &str) -> Vec<Result<(&str, &str), &str>> {
         .collect()
 }
 
-/// The `<kind> <name>` lines in a README's surface block, or the line that
+/// The `<kind> <name>` lines in a README's surface blocks, or the line that
 /// isn't in that form. A README without the block has no surface.
 pub fn surface(readme: &str) -> Vec<Result<&str, &str>> {
     block(readme, "surface")
@@ -25,13 +25,17 @@ pub fn surface(readme: &str) -> Vec<Result<&str, &str>> {
         .collect()
 }
 
-/// The non-blank, trimmed lines of a README's first ```` ```kind ```` block.
+/// The non-blank, trimmed lines of every ```` ```kind ```` block in a README.
 fn block<'a>(readme: &'a str, kind: &str) -> impl Iterator<Item = &'a str> {
-    readme
-        .split_once(&format!("```{kind}\n"))
-        .and_then(|(_, rest)| rest.split_once("```"))
-        .map_or("", |(block, _)| block)
-        .lines()
+    let open = format!("```{kind}\n");
+    let blocks: Vec<&str> = readme
+        .split(open.as_str())
+        .skip(1)
+        .map(|rest| rest.split_once("```").map_or("", |(block, _)| block))
+        .collect();
+    blocks
+        .into_iter()
+        .flat_map(str::lines)
         .map(str::trim)
         .filter(|line| !line.is_empty())
 }
