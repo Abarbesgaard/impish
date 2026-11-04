@@ -46,8 +46,12 @@ struct Position {
 }
 
 enum Outcome {
-    /// Caught; the active obligations tagged on the tests that failed.
-    Killed(BTreeSet<String>),
+    /// Caught: the active obligations tagged on the tests that failed, and
+    /// those tests.
+    Killed {
+        by: BTreeSet<String>,
+        tests: BTreeSet<String>,
+    },
     Survived,
     /// The mutant doesn't build, so it proves nothing.
     Unviable,
@@ -129,7 +133,7 @@ pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
     for mutant in &mutants {
         let outcome = scratch.try_mutant(mutant, primitive, timeout, &tags, &active)?;
         let mut verdict = match &outcome {
-            Outcome::Killed(by) => {
+            Outcome::Killed { by, .. } => {
                 format!(
                     "killed by {}",
                     by.iter().cloned().collect::<Vec<_>>().join(", ")
@@ -148,9 +152,11 @@ pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
         outcomes.push(outcome);
     }
     let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
+    let tests: Vec<&str> = tags.keys().map(String::as_str).collect();
     Ok(report(
         primitive,
         &active,
+        &tests,
         &tried,
         &declared,
         &declared_file,
@@ -167,10 +173,12 @@ fn key(m: &Mutant) -> String {
 }
 
 /// The kill matrix, then why the Contract isn't met: hollow obligations,
-/// mutants no contract test catches, and declarations that don't hold.
+/// blind tests, mutants no contract test catches, and declarations that
+/// don't hold.
 fn report(
     primitive: &str,
     active: &[String],
+    tests: &[&str],
     tried: &[(&Mutant, &Outcome)],
     declared: &[Declared],
     declared_file: &str,
@@ -179,7 +187,7 @@ fn report(
     let count = |f: fn(&Outcome) -> bool| outcomes.iter().filter(|o| f(o)).count();
     println!(
         "\n{} killed, {} survived, {} timed out, {} unviable",
-        count(|o| matches!(o, Outcome::Killed(_))),
+        count(|o| matches!(o, Outcome::Killed { .. })),
         count(|o| matches!(o, Outcome::Survived)),
         count(|o| matches!(o, Outcome::TimedOut)),
         count(|o| matches!(o, Outcome::Unviable)),
@@ -191,7 +199,7 @@ fn report(
         let mut killed = 0;
         let mut unique = 0;
         for by in outcomes.iter().filter_map(|o| match o {
-            Outcome::Killed(by) if by.contains(id) => Some(by),
+            Outcome::Killed { by, .. } if by.contains(id) => Some(by),
             _ => None,
         }) {
             killed += 1;
@@ -206,6 +214,14 @@ fn report(
     }
     println!("  unique: caught by no other obligation's tests.");
     println!("  Tests outside the Contract weren't run; they may catch it too.");
+    for test in tests {
+        let catches = outcomes
+            .iter()
+            .any(|o| matches!(o, Outcome::Killed { tests, .. } if tests.contains(*test)));
+        if !catches {
+            problems.push(format!("{test} is blind: it catches none of the mutants"));
+        }
+    }
     for (mutant, outcome) in tried {
         let what = match outcome {
             Outcome::Survived => "survived",
@@ -224,7 +240,7 @@ fn report(
         let mut matched = false;
         for (_, outcome) in tried.iter().filter(|(m, _)| key(m) == d.name) {
             matched = true;
-            if let Outcome::Killed(ids) = outcome {
+            if let Outcome::Killed { by: ids, .. } = outcome {
                 by.extend(ids.iter().map(String::as_str));
             }
         }

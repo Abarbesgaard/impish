@@ -12,7 +12,8 @@ Every mutant must be caught. One that no contract test catches, whether it
 survives or times out, fails the run unless `contract/<primitive>/mutants.md`
 declares it: `equivalent` when no program could tell it from the original,
 `unpromised` when its behaviour changes and the Contract leaves that open
-([0011](../../docs/decisions/0011-mutate-is-strict.md)).
+([0011](../../docs/decisions/0011-mutate-is-strict.md)). Every contract test
+must catch at least one mutant too.
 
 ## Obligations
 
@@ -62,6 +63,12 @@ declares it: `equivalent` when no program could tell it from the original,
 ### A9 — Declarations are checked
 - **must:** fail, naming each declared mutant a contract test catches, each declaration that matches no mutant, and each declaration block with no `##` heading giving its reason; and stop, undecided, when `mutants.md` exists but can't be read
 - **why:** a stale or contradicted declaration hides a mutant the Contract does catch, or a reason nobody wrote down
+- **kind:** functional
+- **status:** active
+
+### A10 — A blind test fails
+- **must:** fail, naming each contract test of the primitive that catches none of the mutants, even when its obligations are caught by other tests
+- **why:** a test that passes whatever the code does proves nothing (rule 26; #28)
 - **kind:** functional
 - **status:** active
 

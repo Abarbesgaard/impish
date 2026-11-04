@@ -7,7 +7,8 @@
 
 `cargo impish mutate <primitive>` fails on any mutant of the covered code that
 no contract test catches, whether it survives or times out. A hollow
-obligation still fails too. The only way past a mutant is to declare it in
+obligation still fails too, and so does a blind contract test, one that
+catches no mutant (#28). The only way past a mutant is to declare it in
 `contract/<primitive>/mutants.md`, under a `##` heading that gives the reason:
 
 - `equivalent`: no program could tell the mutant from the original.

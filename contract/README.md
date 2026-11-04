@@ -80,6 +80,7 @@ Contract tests are black-box: they run the `cargo-impish` binary.
 `cargo impish check` holds the Contract to its tests; see `contract/check/`.
 `cargo impish mutate <primitive>` breaks the code a primitive covers with
 cargo-mutants and credits each kill to the obligations whose tests caught it.
-It is strict: an obligation whose tests catch nothing is hollow and fails, and
-so does any mutant no contract test catches, unless `mutants.md` declares it.
+It is strict: an obligation whose tests catch nothing is hollow and fails, a
+contract test that catches nothing is blind and fails, and so does any mutant
+no contract test catches, unless `mutants.md` declares it.
 See `contract/mutate/`.
