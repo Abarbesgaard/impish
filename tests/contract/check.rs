@@ -346,6 +346,37 @@ fn every_covers_and_surface_block_counts() {
     );
 }
 
+#[impish::contract("check/A23")]
+fn a_test_outside_a_primitive_test_file_fails() {
+    let p = calc(&["A1"], &test_fn("adds", &["calc/A1"]));
+    p.write(
+        "tests/contract/main.rs",
+        "mod calc;\nmod cite;\nmod harness;\n\n#[test]\nfn guard() {}\n",
+    )
+    .write(
+        "tests/contract/cite.rs",
+        "#[test]\nfn cites() {}\n\nfn helper() {}\n",
+    )
+    .write("tests/contract/harness.rs", "pub fn helper() {}\n")
+    .write(
+        "tests/contract/nested/deep.rs",
+        "mod m {\n    #[tokio::test]\n    async fn later() {}\n}\n",
+    )
+    .write("tests/unit.rs", "#[test]\nfn unit() {}\n");
+    let out = p.check();
+    assert_eq!(out.code, Some(1));
+    let outside = "a test outside tests/contract/<primitive>.rs";
+    assert_eq!(
+        out.stderr,
+        format!(
+            "tests/contract/cite.rs:1: {outside}\n\
+             tests/contract/main.rs:5: {outside}\n\
+             tests/contract/nested/deep.rs:2: {outside}\n\
+             {NOT_MET}\n"
+        )
+    );
+}
+
 fn with_surface(lines: &str) -> Project {
     let p = calc(&[], &test_fn("adds", &["calc/A1"]));
     let surface = format!("{}\n```surface\n{lines}```\n", readme(&["A1"]));

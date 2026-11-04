@@ -9,7 +9,7 @@ use anyhow::{Context, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::contract::{contract_attributes, covers, surface, tagged_tests};
+use crate::contract::{contract_attributes, covers, surface, tagged_tests, test_attributes};
 use impish_core::obligations;
 
 /// `impish.toml`, at the project root; every key is optional.
@@ -259,6 +259,7 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         }
     }
     report.problems.extend(stray_tags(root, &names));
+    report.problems.extend(stray_tests(root, &names));
     report.real = real;
     Ok(report)
 }
@@ -294,6 +295,31 @@ fn stray_tags(root: &Path, names: &[String]) -> Vec<String> {
         for n in contract_attributes(&src) {
             problems.push(format!(
                 "{rel}:{n}: an #[impish::contract] attribute outside tests/contract/<primitive>.rs"
+            ));
+        }
+    }
+    problems
+}
+
+/// Tests in `tests/contract/` outside the primitives' test files.
+fn stray_tests(root: &Path, names: &[String]) -> Vec<String> {
+    let dir = root.join("tests/contract");
+    let mut files = Vec::new();
+    rust_files(&dir, &mut files);
+    files.sort();
+    let mut problems = Vec::new();
+    for file in &files {
+        let home = names
+            .iter()
+            .any(|name| *file == dir.join(format!("{name}.rs")));
+        if home {
+            continue;
+        }
+        let src = fs::read_to_string(file).unwrap_or_default();
+        let rel = file.strip_prefix(root).unwrap_or(file).display();
+        for n in test_attributes(&src) {
+            problems.push(format!(
+                "{rel}:{n}: a test outside tests/contract/<primitive>.rs"
             ));
         }
     }

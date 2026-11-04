@@ -134,6 +134,7 @@ The Contract is not met.
 | `<primitive>/A<n> has no test` | Write a test that proves it, or retire the obligation if it's no longer a promise. |
 | `contract/coverage.json is out of date` | Run `cargo impish check --write` and commit the result. |
 | `…: covers <file>::<fn>, which doesn't exist` | The function was renamed or moved. Update the covers block. |
+| `<file>:<line>: a test outside tests/contract/<primitive>.rs` | A test in `main.rs`, a helper, or a file with no `contract/<name>/README.md`. Give it a Contract, or move it out of `tests/contract/`. |
 
 A tag that names no obligation stops at `cargo test`, before `check` runs:
 
