@@ -157,7 +157,9 @@ error: `calc/A9`: contract/calc/README.md doesn't declare A9
 `check` proves every obligation has a test. `mutate` proves the tests would
 notice a bug. It breaks the covered code one change at a time (a mutant), runs
 the primitive's contract tests, and credits each failure to the obligations
-the failing tests name:
+the failing tests name. It is strict: every mutant must be caught, or declared
+in `contract/<primitive>/mutants.md` with a reason
+([0011](https://github.com/Abarbesgaard/impish/blob/main/docs/decisions/0011-mutate-is-strict.md)):
 
 ```text
 $ cargo impish mutate calc
@@ -175,6 +177,8 @@ calc: 10 mutants of 2 functions, 3 tests
   unique: caught by no other obligation's tests.
   Tests outside the Contract weren't run; they may catch it too.
 calc/A3 is hollow: its tests catch none of the mutants
+src/lib.rs: replace sub -> i32 with 1 survived: catch it in a contract test, or declare it in contract/calc/mutants.md
+src/lib.rs: replace - with / in sub survived: catch it in a contract test, or declare it in contract/calc/mutants.md
 The Contract is not met.
 ```
 
@@ -187,9 +191,42 @@ The Contract is not met.
 - **hollow:** an obligation with no kills at all. Its tests pass whatever the
   code does, so they prove nothing. Assert on the result, or retire the
   obligation.
-- **SURVIVED:** a bug no contract test caught. Here the only test is
-  `sub(3, 2) == 1`, and `3 / 2` and a constant `1` give 1 too. A second
-  case, say `sub(5, 2) == 3`, kills both.
+- **SURVIVED:** a bug no contract test caught, so the run fails. Here the
+  only test is `sub(3, 2) == 1`, and `3 / 2` and a constant `1` give 1 too. A
+  second case, say `sub(5, 2) == 3`, kills both. A mutant that times out
+  fails the same way: a hang is not a catch.
+
+The run passes only when every obligation catches something and every mutant
+is caught or declared: `Every mutant of calc is caught or declared.`
+
+### Declaring mutants
+
+Some mutants can't be caught, and some changes the Contract leaves open on
+purpose. Declare them in `contract/<primitive>/mutants.md`, in a fenced block
+under a `##` heading that says why:
+
+````markdown
+# Mutants calc leaves alone
+
+## sub's result is only ever compared with zero
+
+Callers check `sub(a, b) == 0`, and the Contract promises nothing more.
+
+```unpromised
+src/lib.rs: replace - with / in sub
+```
+````
+
+- **`equivalent`:** no program could tell the mutant from the original.
+- **`unpromised`:** behaviour changes, and the Contract leaves it open.
+
+A line is the mutant's name as `mutate` prints it, without the line and
+column, so it still matches after the code above it moves. It covers every
+mutant with that name. Declared mutants still run, and the run prints them as
+`SURVIVED, declared unpromised`. A declaration fails the run when a contract
+test catches its mutant (`… is declared equivalent, but calc/A1 catches it`),
+when it matches no mutant (`… matches no mutant`), or when its block has no
+`##` heading above it.
 
 ## The Contract format
 

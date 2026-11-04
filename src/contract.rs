@@ -128,3 +128,47 @@ pub fn test_attributes(src: &str) -> Vec<usize> {
     }
     lines.0
 }
+
+/// A mutant `contract/<primitive>/mutants.md` declares, by its cargo-mutants
+/// name without line and column.
+pub struct Declared<'a> {
+    /// 1-based line in mutants.md.
+    pub line: usize,
+    /// `equivalent` or `unpromised`.
+    pub kind: &'a str,
+    pub name: &'a str,
+}
+
+/// The mutants a mutants.md declares, and the line and kind of each
+/// declaration block with no `##` heading above it to give its reason.
+pub fn declarations(text: &str) -> (Vec<Declared<'_>>, Vec<(usize, &str)>) {
+    let (mut declared, mut unreasoned) = (Vec::new(), Vec::new());
+    let mut reasoned = false;
+    // The open fence: `Some(kind)` in a declaration block, `Some("")` in any other.
+    let mut fence: Option<&str> = None;
+    for (i, line) in text.lines().enumerate() {
+        let line = line.trim();
+        match fence {
+            Some(_) if line.starts_with("```") => fence = None,
+            Some("") => {}
+            Some(kind) if !line.is_empty() => declared.push(Declared {
+                line: i + 1,
+                kind,
+                name: line,
+            }),
+            Some(_) => {}
+            None => match line.strip_prefix("```") {
+                Some(kind @ ("equivalent" | "unpromised")) => {
+                    if !reasoned {
+                        unreasoned.push((i + 1, kind));
+                    }
+                    fence = Some(kind);
+                }
+                Some(_) => fence = Some(""),
+                None if line.starts_with('#') => reasoned = line.starts_with("##"),
+                None => {}
+            },
+        }
+    }
+    (declared, unreasoned)
+}

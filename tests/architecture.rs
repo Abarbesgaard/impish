@@ -6,7 +6,8 @@
 //!
 //!   core/src     impish-core: the Contract's README format, pure
 //!   impish/src   #[impish::contract]: the attribute, on top of core
-//!   src          cargo-impish: main → {check, mutate} → contract, on top of core
+//!   src          cargo-impish: main → {check, mutate} → contract, on top of core;
+//!                mutate's scratch copy lives in src/mutate/
 
 use archunit::{
     Checkable, FileInfo, ResultFactory, Violation, assert_passes, pattern, project_files,
@@ -51,7 +52,7 @@ fn binary_layers_depend_inwards() {
         .layer("check")
         .defined_by("src/check.rs")
         .layer("mutate")
-        .defined_by("src/mutate.rs")
+        .defined_by("src/mutate**")
         .layer("contract")
         .defined_by("src/contract.rs")
         .where_layer("contract")
@@ -156,7 +157,8 @@ fn only_commands_serialise_and_report() {
         .in_path(
             pattern("src/**")
                 .except_in_path("src/check.rs")
-                .except_in_path("src/mutate.rs"),
+                .except_in_path("src/mutate.rs")
+                .except_in_path("src/mutate/**"),
         )
         .should_not()
         .depend_on_external_modules()

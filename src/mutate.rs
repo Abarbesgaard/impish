@@ -4,16 +4,18 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Read;
-use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode, Stdio};
-use std::thread;
+use std::path::Path;
+use std::process::{Command, ExitCode};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, anyhow, bail};
 use serde::Deserialize;
 
-use crate::contract::{covers, tagged_tests};
+mod scratch;
+
+use scratch::Scratch;
+
+use crate::contract::{Declared, covers, declarations, tagged_tests};
 use impish_core::obligations;
 
 #[derive(Deserialize)]
@@ -70,6 +72,22 @@ pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
     if targets.is_empty() {
         bail!("{readme_file} covers no code, so there is nothing to mutate");
     }
+    let declared_file = format!("contract/{primitive}/mutants.md");
+    let declared_text = match fs::read_to_string(root.join(&declared_file)) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e).with_context(|| format!("read {declared_file}")),
+    };
+    let (declared, unreasoned) = declarations(&declared_text);
+    if !unreasoned.is_empty() {
+        for (line, kind) in unreasoned {
+            eprintln!(
+                "{declared_file}:{line}: an {kind} block with no ## heading giving its reason"
+            );
+        }
+        eprintln!("The Contract is not met.");
+        return Ok(ExitCode::FAILURE);
+    }
     let tests_file = format!("tests/contract/{primitive}.rs");
     let tests =
         fs::read_to_string(root.join(&tests_file)).with_context(|| format!("no {tests_file}"))?;
@@ -110,7 +128,7 @@ pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
     let mut outcomes = Vec::new();
     for mutant in &mutants {
         let outcome = scratch.try_mutant(mutant, primitive, timeout, &tags, &active)?;
-        let verdict = match &outcome {
+        let mut verdict = match &outcome {
             Outcome::Killed(by) => {
                 format!(
                     "killed by {}",
@@ -121,15 +139,43 @@ pub fn run(root: &Path, primitive: &str) -> anyhow::Result<ExitCode> {
             Outcome::Unviable => "unviable".to_string(),
             Outcome::TimedOut => "timed out".to_string(),
         };
+        if matches!(outcome, Outcome::Survived | Outcome::TimedOut)
+            && let Some(d) = declared.iter().find(|d| d.name == key(mutant))
+        {
+            verdict = format!("{verdict}, declared {}", d.kind);
+        }
         println!("  {}  {verdict}", mutant.name);
         outcomes.push(outcome);
     }
-    Ok(report(primitive, &active, &outcomes))
+    let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
+    Ok(report(
+        primitive,
+        &active,
+        &tried,
+        &declared,
+        &declared_file,
+    ))
 }
 
-/// The kill matrix, then the hollow obligations: those whose tests catch none
-/// of the mutants.
-fn report(primitive: &str, active: &[String], outcomes: &[Outcome]) -> ExitCode {
+/// The mutant's name without line and column, as mutants.md declares it.
+fn key(m: &Mutant) -> String {
+    let rest = m.name.strip_prefix(m.file.as_str());
+    let rest = rest
+        .and_then(|r| r.split_once(": "))
+        .map_or(m.name.as_str(), |(_, r)| r);
+    format!("{}: {rest}", m.file)
+}
+
+/// The kill matrix, then why the Contract isn't met: hollow obligations,
+/// mutants no contract test catches, and declarations that don't hold.
+fn report(
+    primitive: &str,
+    active: &[String],
+    tried: &[(&Mutant, &Outcome)],
+    declared: &[Declared],
+    declared_file: &str,
+) -> ExitCode {
+    let outcomes: Vec<&Outcome> = tried.iter().map(|(_, o)| *o).collect();
     let count = |f: fn(&Outcome) -> bool| outcomes.iter().filter(|o| f(o)).count();
     println!(
         "\n{} killed, {} survived, {} timed out, {} unviable",
@@ -140,7 +186,7 @@ fn report(primitive: &str, active: &[String], outcomes: &[Outcome]) -> ExitCode 
     );
     let width = active.iter().map(String::len).max().unwrap_or(0).max(10);
     println!("\n  {:width$}  killed  unique", "obligation");
-    let mut hollow = Vec::new();
+    let mut problems = Vec::new();
     for id in active {
         let mut killed = 0;
         let mut unique = 0;
@@ -153,17 +199,50 @@ fn report(primitive: &str, active: &[String], outcomes: &[Outcome]) -> ExitCode 
         }
         println!("  {id:width$}  {killed:>6}  {unique:>6}");
         if killed == 0 {
-            hollow.push(id);
+            problems.push(format!(
+                "{id} is hollow: its tests catch none of the mutants"
+            ));
         }
     }
     println!("  unique: caught by no other obligation's tests.");
     println!("  Tests outside the Contract weren't run; they may catch it too.");
-    if hollow.is_empty() {
-        println!("\nEvery obligation of {primitive} catches a mutant.");
+    for (mutant, outcome) in tried {
+        let what = match outcome {
+            Outcome::Survived => "survived",
+            Outcome::TimedOut => "timed out",
+            _ => continue,
+        };
+        let name = key(mutant);
+        if !declared.iter().any(|d| d.name == name) {
+            problems.push(format!(
+                "{name} {what}: catch it in a contract test, or declare it in {declared_file}"
+            ));
+        }
+    }
+    for d in declared {
+        let mut by = BTreeSet::new();
+        let mut matched = false;
+        for (_, outcome) in tried.iter().filter(|(m, _)| key(m) == d.name) {
+            matched = true;
+            if let Outcome::Killed(ids) = outcome {
+                by.extend(ids.iter().map(String::as_str));
+            }
+        }
+        let at = format!("{declared_file}:{}: {}", d.line, d.name);
+        if !matched {
+            problems.push(format!("{at} matches no mutant"));
+        } else if !by.is_empty() {
+            let verb = if by.len() == 1 { "catches" } else { "catch" };
+            let by = by.into_iter().collect::<Vec<_>>().join(", ");
+            problems.push(format!("{at} is declared {}, but {by} {verb} it", d.kind));
+        }
+    }
+    if problems.is_empty() {
+        println!("\nEvery mutant of {primitive} is caught or declared.");
         return ExitCode::SUCCESS;
     }
-    for id in hollow {
-        eprintln!("{id} is hollow: its tests catch none of the mutants");
+    for problem in problems {
+        eprintln!("{problem}");
     }
     eprintln!("The Contract is not met.");
     ExitCode::FAILURE
@@ -202,177 +281,4 @@ fn list(root: &Path, targets: &[(&str, &str)]) -> anyhow::Result<Vec<Mutant>> {
 
 fn cargo() -> String {
     std::env::var("CARGO").unwrap_or_else(|_| "cargo".into())
-}
-
-/// `src` with the span replaced.
-fn mutated(src: &str, span: &Span, replacement: &str) -> anyhow::Result<String> {
-    let offset = |p: &Position| -> Option<usize> {
-        let start: usize = src
-            .split_inclusive('\n')
-            .take(p.line - 1)
-            .map(str::len)
-            .sum();
-        let line = src[start..].split_inclusive('\n').next().unwrap_or("");
-        let column = line
-            .char_indices()
-            .map(|(i, _)| i)
-            .chain([line.len()])
-            .nth(p.column - 1)?;
-        Some(start + column)
-    };
-    let (Some(start), Some(end)) = (offset(&span.start), offset(&span.end)) else {
-        bail!("a mutant's span is outside its file");
-    };
-    Ok(format!("{}{replacement}{}", &src[..start], &src[end..]))
-}
-
-/// A copy of the project to mutate, so the real one is never touched. Builds
-/// share one target directory, `impish-mutate` under `CARGO_TARGET_DIR` or
-/// the project's `target/`, so each mutant only rebuilds what it changed.
-struct Scratch {
-    dir: PathBuf,
-    target: PathBuf,
-}
-
-impl Scratch {
-    fn copy(root: &Path) -> anyhow::Result<Self> {
-        let base = root.join("target/impish/mutate");
-        let dir = base.join("project");
-        if dir.exists() {
-            fs::remove_dir_all(&dir).context("clear the scratch copy")?;
-        }
-        copy_dir(root, &dir, true).context("copy the project to mutate")?;
-        let target = std::env::var_os("CARGO_TARGET_DIR")
-            .map_or_else(|| root.join("target"), PathBuf::from)
-            .join("impish-mutate");
-        Ok(Self { dir, target })
-    }
-
-    /// The contract test executable, or `None` when it doesn't build.
-    fn build(&self) -> anyhow::Result<Option<PathBuf>> {
-        let out = Command::new(cargo())
-            .args([
-                "test",
-                "--test",
-                "contract",
-                "--no-run",
-                "--message-format=json",
-            ])
-            .current_dir(&self.dir)
-            .env("CARGO_TARGET_DIR", &self.target)
-            .stderr(Stdio::null())
-            .output()
-            .context("run `cargo test --no-run`")?;
-        if !out.status.success() {
-            return Ok(None);
-        }
-        Ok(String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-            .filter(|msg| msg["target"]["name"] == "contract")
-            .filter_map(|msg| msg["executable"].as_str().map(PathBuf::from))
-            .next_back())
-    }
-
-    /// The primitive's tests that fail, or `None` when they time out.
-    fn test(
-        &self,
-        exe: &Path,
-        primitive: &str,
-        timeout: Option<Duration>,
-    ) -> anyhow::Result<Option<BTreeSet<String>>> {
-        let mut child = Command::new(exe)
-            .arg(format!("{primitive}::"))
-            .current_dir(&self.dir)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .context("run the contract tests")?;
-        let mut stdout = child.stdout.take().expect("piped stdout");
-        let reader = thread::spawn(move || {
-            let mut text = String::new();
-            stdout.read_to_string(&mut text).map(|_| text)
-        });
-        let started = Instant::now();
-        while child.try_wait()?.is_none() {
-            if timeout.is_some_and(|t| started.elapsed() > t) {
-                child.kill()?;
-                child.wait()?;
-                return Ok(None);
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
-        let text = reader
-            .join()
-            .map_err(|_| anyhow!("read the contract tests' output"))??;
-        Ok(Some(
-            text.lines()
-                .filter_map(|l| l.strip_prefix("test ")?.strip_suffix(" ... FAILED"))
-                .map(String::from)
-                .collect(),
-        ))
-    }
-
-    fn try_mutant(
-        &self,
-        mutant: &Mutant,
-        primitive: &str,
-        timeout: Duration,
-        tags: &BTreeMap<String, Vec<String>>,
-        active: &[String],
-    ) -> anyhow::Result<Outcome> {
-        let path = self.dir.join(&mutant.file);
-        let original =
-            fs::read_to_string(&path).with_context(|| format!("read {}", mutant.file))?;
-        fs::write(
-            &path,
-            mutated(&original, &mutant.span, &mutant.replacement)?,
-        )?;
-        let outcome = match self.build()? {
-            None => Outcome::Unviable,
-            Some(exe) => match self.test(&exe, primitive, Some(timeout))? {
-                None => Outcome::TimedOut,
-                Some(failed) => {
-                    let by: BTreeSet<String> = failed
-                        .iter()
-                        .flat_map(|test| tags.get(test).into_iter().flatten())
-                        .filter(|tag| active.contains(tag))
-                        .cloned()
-                        .collect();
-                    // Caught only by tests that name no active obligation,
-                    // the Contract still lets the mutant through.
-                    if by.is_empty() {
-                        Outcome::Survived
-                    } else {
-                        Outcome::Killed(by)
-                    }
-                }
-            },
-        };
-        fs::write(&path, original)?;
-        Ok(outcome)
-    }
-}
-
-/// Copies `from` to `to`, leaving out `.git` and, at the top, `target`.
-fn copy_dir(from: &Path, to: &Path, top: bool) -> std::io::Result<()> {
-    fs::create_dir_all(to)?;
-    for entry in fs::read_dir(from)? {
-        let entry = entry?;
-        let name = entry.file_name();
-        if name == ".git" || (top && name == "target") {
-            continue;
-        }
-        let path = entry.path();
-        if path.is_dir() {
-            copy_dir(&path, &to.join(&name), false)?;
-        } else {
-            // Written afresh, not `fs::copy`, which keeps the modification
-            // time on macOS: Cargo would take the copy for older than the
-            // last run's mutant build, and reuse that build.
-            fs::write(to.join(&name), fs::read(&path)?)?;
-            fs::set_permissions(to.join(&name), entry.metadata()?.permissions())?;
-        }
-    }
-    Ok(())
 }
