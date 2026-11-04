@@ -41,6 +41,12 @@ tests caught and how many only its tests caught.
 - **kind:** functional
 - **status:** active
 
+### A7 — Each run tests the code as it is
+- **must:** build the project as it is now for the baseline and every mutant, never a build left by an earlier run's mutant
+- **why:** a stale mutant build makes a run red, or quietly wrong (#38)
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate.rs::report
