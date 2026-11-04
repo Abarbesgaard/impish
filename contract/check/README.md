@@ -3,7 +3,8 @@
 `cargo impish check` holds the Contract under `contract/` to its tests. A
 primitive is a directory `contract/<p>/` with a `README.md`; its tests are in
 `tests/contract/<p>.rs`. Problems go to stderr, one per line, and the exit code
-is 1; when the Contract holds the exit code is 0.
+is 1; when the Contract holds the exit code is 0. When `check` can't tell, the
+exit code is 2 (cli/A3).
 
 ## Obligations
 

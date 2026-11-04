@@ -1,13 +1,4 @@
-use crate::harness::{Project, readme, test_fn};
-
-const NOT_MET: &str = "The Contract is not met.";
-
-fn calc(ids: &[&str], tests: &str) -> Project {
-    let p = Project::new();
-    p.write("contract/calc/README.md", &readme(ids))
-        .write("tests/contract/calc.rs", tests);
-    p
-}
+use crate::harness::{NOT_MET, Project, calc, readme, test_fn};
 
 #[impish::contract("check/A1")]
 fn a_held_contract_passes_and_says_what_it_checked() {
@@ -204,7 +195,7 @@ fn check_finds_the_contract_above_the_current_directory() {
 #[impish::contract("check/A7")]
 fn check_without_a_contract_fails() {
     let out = Project::new().check();
-    assert_eq!(out.code, Some(1));
+    assert_eq!(out.code, Some(2));
     assert!(out.stderr.contains("no contract/"), "{}", out.stderr);
 }
 
@@ -437,7 +428,7 @@ fn a_failing_surface_command_fails_check() {
         "[surface]\ncommand = [\"sh\", \"-c\", \"echo broken >&2; exit 3\"]\n",
     );
     let out = p.check();
-    assert_eq!(out.code, Some(1));
+    assert_eq!(out.code, Some(2));
     assert!(out.stderr.contains("surface command"), "{}", out.stderr);
     assert!(out.stderr.contains("broken"), "{}", out.stderr);
 }

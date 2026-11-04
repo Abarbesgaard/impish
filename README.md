@@ -118,6 +118,12 @@ cargo impish mutate add  # every obligation's tests catch a bug in the code
 
 ## When it fails
 
+Both commands exit 0 when the Contract holds and 1 when it doesn't. They exit
+2 when they can't tell, for example with no `contract/` directory, a broken
+`impish.toml`, or contract tests that don't build or are red before
+`mutate` starts. In CI, 1 means fix the Contract or its tests; 2 means fix the
+run.
+
 `check` reports every problem at once, then exits 1:
 
 ```text

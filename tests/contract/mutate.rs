@@ -86,7 +86,7 @@ fn a_red_baseline_fails_before_mutating() {
     let red = ADDS.replace("5)", "6)");
     let out = calc_crate(&format!("{red}{DOUBLES}")).mutate("calc");
 
-    assert_eq!(out.code, Some(1));
+    assert_eq!(out.code, Some(2));
     assert!(
         out.stderr
             .contains("the baseline is red: calc::adds fail before any mutation"),
@@ -107,7 +107,7 @@ fn nothing_to_mutate_fails() {
 
     let out = p.mutate("calc");
 
-    assert_eq!(out.code, Some(1));
+    assert_eq!(out.code, Some(2));
     assert!(
         out.stderr
             .contains("contract/calc/README.md covers no code, so there is nothing to mutate"),

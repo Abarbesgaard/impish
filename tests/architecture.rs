@@ -16,6 +16,9 @@ use archunit::{
 /// Largest file, in non-blank lines, before it must be split by concern.
 const MAX_FILE_LINES: usize = 400;
 
+/// The one line main may print: why a run couldn't decide (exit 2).
+const UNDECIDED: &str = r#"eprintln!("Error: {e:?}");"#;
+
 /// Runs several rules and fails once with every violation, so one broken rule
 /// does not hide the others.
 fn assert_all_pass(rules: &[&dyn Checkable]) {
@@ -167,8 +170,17 @@ fn only_commands_serialise_and_report() {
         )
         .should()
         .adhere_to(
-            |f: &FileInfo| !uses_any(f, &["print!", "println!", "eprint"]),
-            "not print (the commands, src/check.rs and src/mutate.rs, report)",
+            |f: &FileInfo| {
+                code_lines(f)
+                    .filter(|l| {
+                        ["print!", "println!", "eprint"]
+                            .iter()
+                            .any(|n| l.contains(n))
+                    })
+                    .all(|l| f.path.ends_with("src/main.rs") && l == UNDECIDED)
+            },
+            "not print (the commands, src/check.rs and src/mutate.rs, report; \
+             main prints only the error that stopped a run)",
         );
 
     assert_all_pass(&[&rule, &no_print]);
