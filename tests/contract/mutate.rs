@@ -103,6 +103,19 @@ fn a_hollow_obligation_fails_by_name() {
     );
 }
 
+#[impish::contract("mutate/A10")]
+fn a_blind_test_fails_by_name() {
+    let blind = "#[impish::contract(\"calc/A1\")]\n\
+                 fn adds_quietly() {\n    let _ = calc::add(2, 3);\n}\n\n";
+    let out = calc_crate(&format!("{ADDS}{blind}{DOUBLES_EVERY_WAY}")).mutate("calc");
+
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    assert_eq!(
+        out.stderr,
+        format!("calc::adds_quietly is blind: it catches none of the mutants\n{NOT_MET}\n")
+    );
+}
+
 #[impish::contract("mutate/A3")]
 fn a_red_baseline_fails_before_mutating() {
     let red = ADDS.replace("5)", "6)");

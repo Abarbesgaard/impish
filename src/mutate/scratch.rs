@@ -153,7 +153,7 @@ impl Scratch {
                     if by.is_empty() {
                         Outcome::Survived
                     } else {
-                        Outcome::Killed(by)
+                        Outcome::Killed { by, tests: failed }
                     }
                 }
             },

@@ -177,6 +177,7 @@ calc: 10 mutants of 2 functions, 3 tests
   unique: caught by no other obligation's tests.
   Tests outside the Contract weren't run; they may catch it too.
 calc/A3 is hollow: its tests catch none of the mutants
+calc::compares is blind: it catches none of the mutants
 src/lib.rs: replace sub -> i32 with 1 survived: catch it in a contract test, or declare it in contract/calc/mutants.md
 src/lib.rs: replace - with / in sub survived: catch it in a contract test, or declare it in contract/calc/mutants.md
 The Contract is not met.
@@ -191,13 +192,17 @@ The Contract is not met.
 - **hollow:** an obligation with no kills at all. Its tests pass whatever the
   code does, so they prove nothing. Assert on the result, or retire the
   obligation.
+- **blind:** a contract test that catches no mutant, even if its obligation's
+  other tests do. It passes whatever the code does. Make it assert something
+  the code could get wrong, or delete it.
 - **SURVIVED:** a bug no contract test caught, so the run fails. Here the
   only test is `sub(3, 2) == 1`, and `3 / 2` and a constant `1` give 1 too. A
   second case, say `sub(5, 2) == 3`, kills both. A mutant that times out
   fails the same way: a hang is not a catch.
 
-The run passes only when every obligation catches something and every mutant
-is caught or declared: `Every mutant of calc is caught or declared.`
+The run passes only when every obligation and every contract test catches
+something and every mutant is caught or declared: `Every mutant of calc is
+caught or declared.`
 
 ### Declaring mutants
 
