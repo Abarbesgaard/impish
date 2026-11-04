@@ -73,7 +73,7 @@ merges itself (rule 27).
 | Workflow security | CI `zizmor` |
 | Every changed line is mutated, and a survivor fails | CI `mutants` |
 | No new near-duplicate functions | CI `similar`, `scripts/similar-code.sh` |
-| A change to what ships bumps the version | CI `version` ([0006](docs/decisions/0006-every-green-merge-is-a-release.md)) |
+| A change to what ships (`scripts/shipped.sh`) bumps the version | CI `version` ([0006](docs/decisions/0006-every-green-merge-is-a-release.md)) |
 | PR titles are `fix:` (with `bug`) or `refine:` (rule 9) | `pr-title.yml` |
 | Tests that catch nothing another test doesn't | nightly `kill-matrix.yml`, `scripts/kill-matrix.sh` ([0007](docs/decisions/0007-tests-earn-their-place-at-three-grains.md)) |
 
