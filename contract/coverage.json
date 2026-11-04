@@ -2,10 +2,10 @@
   "kinds": {
     "functional": 38,
     "non-functional": 1,
-    "persisted-format": 1,
+    "persisted-format": 3,
     "security": 2
   },
-  "obligations": 42,
+  "obligations": 44,
   "primitives": {
     "attribute": {
       "obligations": 6,
@@ -14,7 +14,7 @@
       ]
     },
     "check": {
-      "obligations": 23,
+      "obligations": 24,
       "surface": [
         "cli check"
       ]
@@ -24,7 +24,7 @@
       "surface": []
     },
     "mutate": {
-      "obligations": 10,
+      "obligations": 11,
       "surface": [
         "cli mutate"
       ]

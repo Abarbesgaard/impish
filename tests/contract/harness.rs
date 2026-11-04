@@ -243,8 +243,13 @@ pub fn calc_crate(tests: &str) -> Project {
 
 impl Project {
     pub fn mutate(&self, primitive: &str) -> Checked {
+        self.mutate_with(primitive, &[])
+    }
+
+    pub fn mutate_with(&self, primitive: &str, args: &[&str]) -> Checked {
         let out = Command::new(env!("CARGO_BIN_EXE_cargo-impish"))
             .args(["mutate", primitive])
+            .args(args)
             .current_dir(self.0.path())
             .env(
                 "CARGO_TARGET_DIR",

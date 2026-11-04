@@ -115,6 +115,7 @@ cargo impish mutate add  # every obligation's tests catch a bug in the code
 | `cargo impish check` | Holds the Contract to its tests. Reports every problem on stderr and exits 1, or says how many obligations held and exits 0. Reads only. |
 | `cargo impish check --write` | Also writes `contract/coverage.json`, the published coverage. Once it exists, `check` fails when it's out of date. |
 | `cargo impish mutate <primitive>` | Breaks the code the primitive's covers block names with [cargo-mutants](https://mutants.rs), on a copy of the project, and credits each kill to the obligations whose tests caught it. Fails on an obligation whose tests catch nothing. Needs `cargo install cargo-mutants`. |
+| `--format json` | On `check` or `mutate`: prints one JSON document on stdout instead of the text, with `version`, `met`, every problem, and the counts (for `mutate`, every mutant's outcome and the tests that caught it). Exits the same way. |
 
 ## When it fails
 
@@ -333,6 +334,10 @@ jobs:
       - run: cargo install cargo-impish cargo-mutants --locked
       - run: cargo impish mutate "${{ matrix.primitive }}"
 ```
+
+To read the results in a later step, add `--format json` and redirect stdout:
+`cargo impish mutate calc --format json > mutate.json`. The document has
+`met`, `mutants`, `obligations` (the kill matrix) and `problems`.
 
 impish's own [CI](https://github.com/Abarbesgaard/impish/blob/main/.github/workflows/ci.yml) and
 [kill matrix](https://github.com/Abarbesgaard/impish/blob/main/.github/workflows/kill-matrix.yml) go further: pinned actions, sharding and a per-test matrix.

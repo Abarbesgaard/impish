@@ -5,7 +5,7 @@ mod mutate;
 use std::path::Path;
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 /// The Contract gate for Rust, after Impatient Programming.
 #[derive(Parser)]
@@ -22,6 +22,8 @@ enum Command {
         /// Write contract/coverage.json, the Contract's published coverage.
         #[arg(long)]
         write: bool,
+        #[arg(long, value_enum, default_value_t = Format::Text)]
+        format: Format,
     },
     /// Break the code a primitive covers and credit each kill to the
     /// obligations whose tests caught it; fail on an obligation that catches
@@ -29,7 +31,16 @@ enum Command {
     Mutate {
         /// The primitive, a directory under contract/.
         primitive: String,
+        #[arg(long, value_enum, default_value_t = Format::Text)]
+        format: Format,
     },
+}
+
+/// How a run reports: text for people, or one JSON document on stdout.
+#[derive(Clone, Copy, PartialEq, ValueEnum)]
+enum Format {
+    Text,
+    Json,
 }
 
 /// The nearest directory, from `cwd` up, that has `contract/`.
@@ -56,7 +67,9 @@ fn run() -> anyhow::Result<ExitCode> {
     }
     let cwd = std::env::current_dir()?;
     match Cli::parse_from(args).command {
-        Command::Check { write } => check::run(root(&cwd)?, write),
-        Command::Mutate { primitive } => mutate::run(root(&cwd)?, &primitive),
+        Command::Check { write, format } => check::run(root(&cwd)?, write, format == Format::Json),
+        Command::Mutate { primitive, format } => {
+            mutate::run(root(&cwd)?, &primitive, format == Format::Json)
+        }
     }
 }

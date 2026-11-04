@@ -313,3 +313,80 @@ fn an_unreadable_declaration_file_stops_the_run() {
         out.stderr
     );
 }
+
+#[impish::contract("mutate/A11")]
+fn json_reports_what_the_text_does() {
+    let out = calc_crate(&format!("{ADDS}{DOUBLES}")).mutate_with("calc", &["--format", "json"]);
+
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    assert_eq!(out.stderr, "");
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["version"], 1);
+    assert_eq!(doc["primitive"], "calc");
+    assert_eq!(doc["met"], false);
+    let mutant = |name: &str| {
+        doc["mutants"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["name"] == name)
+            .unwrap_or_else(|| panic!("no {name} in {doc}"))
+            .clone()
+    };
+    assert_eq!(
+        mutant("src/lib.rs:2:7: replace + with - in add"),
+        serde_json::json!({
+            "name": "src/lib.rs:2:7: replace + with - in add",
+            "outcome": "killed",
+            "caught_by": ["calc/A1"],
+            "tests": ["calc::adds"],
+            "declared": null,
+        })
+    );
+    assert_eq!(
+        mutant("src/lib.rs:6:7: replace * with + in double")["outcome"],
+        "survived"
+    );
+    let mutants = doc["mutants"].as_array().unwrap();
+    let count = |o: &str| mutants.iter().filter(|m| m["outcome"] == o).count();
+    assert_eq!(doc["killed"], count("killed"));
+    assert_eq!(doc["survived"], 1);
+    assert_eq!(doc["timed_out"], 0);
+    assert_eq!(doc["unviable"], count("unviable"));
+    let rows = doc["obligations"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["id"], "calc/A1");
+    assert_ne!(rows[0]["killed"], 0);
+    assert_eq!(rows[0]["killed"], rows[0]["unique"]);
+    assert_eq!(
+        doc["problems"],
+        serde_json::json!([format!(
+            "{SURVIVOR} survived: catch it in a contract test, \
+             or declare it in contract/calc/mutants.md"
+        )])
+    );
+}
+
+#[impish::contract("mutate/A11")]
+fn json_names_a_declaration() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    p.write(
+        "contract/calc/mutants.md",
+        &declaring("unpromised", &[SURVIVOR]),
+    );
+
+    let out = p.mutate_with("calc", &["--format", "json"]);
+
+    assert_eq!(out.code, Some(0), "{}", out.stdout);
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["met"], true);
+    let declared: Vec<_> = doc["mutants"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| !m["declared"].is_null())
+        .collect();
+    assert_eq!(declared.len(), 1, "{doc}");
+    assert_eq!(declared[0]["declared"], "unpromised");
+    assert_eq!(declared[0]["outcome"], "survived");
+}
