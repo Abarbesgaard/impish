@@ -368,25 +368,33 @@ fn json_reports_what_the_text_does() {
 }
 
 #[impish::contract("mutate/A11")]
-fn json_names_a_declaration() {
+fn json_names_each_mutant_its_own_declaration() {
     let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    let killed = "src/lib.rs: replace + with - in add";
     p.write(
         "contract/calc/mutants.md",
-        &declaring("unpromised", &[SURVIVOR]),
+        &format!(
+            "{}{}",
+            declaring("equivalent", &[killed]),
+            declaring("unpromised", &[SURVIVOR]).replacen("# Mutants calc leaves alone\n\n", "", 1)
+        ),
     );
 
     let out = p.mutate_with("calc", &["--format", "json"]);
 
-    assert_eq!(out.code, Some(0), "{}", out.stdout);
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
     let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
-    assert_eq!(doc["met"], true);
     let declared: Vec<_> = doc["mutants"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|m| !m["declared"].is_null())
+        .map(|m| {
+            (
+                m["outcome"].as_str().unwrap(),
+                m["declared"].as_str().unwrap(),
+            )
+        })
         .collect();
-    assert_eq!(declared.len(), 1, "{doc}");
-    assert_eq!(declared[0]["declared"], "unpromised");
-    assert_eq!(declared[0]["outcome"], "survived");
+    assert_eq!(declared, [("survived", "unpromised")], "{doc}");
 }
