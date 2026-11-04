@@ -1,10 +1,25 @@
 name: CI
 
-# Guardrails fire on every change (Impatient Programming, rule 24). The `CI`
-# job at the end is the only check main's ruleset requires, so green merges
-# itself (rule 27). On main, the Release job then publishes every new version
-# (rule 3), and the Version job makes every PR that changes what ships bump it.
-
+# One pipeline, one gate. Guardrails fire on every change (Impatient
+# Programming, rule 24); `CI` is the only check main's ruleset requires, so
+# green merges itself (rule 27), and every green merge that bumps the version
+# is released (rule 3).
+#
+#   Format and Clippy ──┐
+#   Dependency policy ──┤
+#   Workflow security ──┤
+#   Similar code (PRs) ─┼───────────────────┬─ CI ── Release (main, new version)
+#   Version (PRs) ──────┤                   │
+#   Test ───────────────┴─ Mutants (PRs) ───┘
+#
+# Format and Clippy: fmt, clippy, and the pipeline's own scripts (tests/pipeline).
+# Dependency policy: cargo-deny; licences, sources, advisories (deny.toml).
+# Workflow security: zizmor on these workflows.
+# Similar code:      no new near-duplicate functions (scripts/similar-code.sh).
+# Version:           a change to what ships bumps the version (scripts/shipped.sh).
+# Test:              the suite, then `cargo impish check` on impish itself.
+# Mutants:           every line the PR changes is mutated; a survivor fails.
+# Release:           publishes the crates and a GitHub release for a new version.
 on:
   push:
     branches: [main]
@@ -19,6 +34,11 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+
+# Every step runs with -o pipefail, so `script | tee` fails when the script does.
+defaults:
+  run:
+    shell: bash
 
 jobs:
   lint:
