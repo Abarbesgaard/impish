@@ -102,3 +102,29 @@ pub fn contract_attributes(src: &str) -> Vec<usize> {
     }
     lines.0
 }
+
+/// The 1-based lines of the test attributes (`#[test]`, or any path ending in
+/// `test`) on functions in a Rust file, or none if it isn't valid Rust.
+pub fn test_attributes(src: &str) -> Vec<usize> {
+    struct Lines(Vec<usize>);
+    impl Visit<'_> for Lines {
+        fn visit_item_fn(&mut self, f: &ItemFn) {
+            for attr in &f.attrs {
+                if attr
+                    .path()
+                    .segments
+                    .last()
+                    .is_some_and(|s| s.ident == "test")
+                {
+                    self.0.push(attr.span().start().line);
+                }
+            }
+            visit::visit_item_fn(self, f);
+        }
+    }
+    let mut lines = Lines(Vec::new());
+    if let Ok(file) = syn::parse_file(src) {
+        lines.visit_file(&file);
+    }
+    lines.0
+}

@@ -121,6 +121,12 @@ is 1; when the Contract holds the exit code is 0.
 - **kind:** functional
 - **status:** active
 
+### A23 — Only Contract tests live in tests/contract/
+- **must:** fail, naming the file and line, on each test in `tests/contract/` outside a primitive's test file, such as one in `main.rs`, a helper module, or `tests/contract/<name>.rs` with no `contract/<name>/README.md`
+- **why:** a test there that no Contract reads looks like a promise and proves none (#27)
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/check.rs::run
 src/check.rs::check
