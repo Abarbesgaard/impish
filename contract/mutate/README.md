@@ -35,6 +35,12 @@ tests caught and how many only its tests caught.
 - **kind:** functional
 - **status:** active
 
+### A6 — The kill matrix says what unique means
+- **must:** print, under the kill matrix, that unique counts the mutants caught by no other obligation's tests, and that tests outside the Contract weren't run
+- **why:** read as "caught by no other test in the suite", unique hides the duplicates Rule 26 asks us to remove (#26)
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate.rs::report

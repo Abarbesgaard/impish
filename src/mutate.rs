@@ -156,6 +156,8 @@ fn report(primitive: &str, active: &[String], outcomes: &[Outcome]) -> ExitCode 
             hollow.push(id);
         }
     }
+    println!("  unique: caught by no other obligation's tests.");
+    println!("  Tests outside the Contract weren't run; they may catch it too.");
     if hollow.is_empty() {
         println!("\nEvery obligation of {primitive} catches a mutant.");
         return ExitCode::SUCCESS;
