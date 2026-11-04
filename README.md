@@ -1,5 +1,10 @@
 # impish
 
+[![crates.io](https://img.shields.io/crates/v/cargo-impish.svg)](https://crates.io/crates/cargo-impish)
+[![docs.rs](https://img.shields.io/docsrs/impish)](https://docs.rs/impish)
+[![CI](https://github.com/Abarbesgaard/impish/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Abarbesgaard/impish/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/crates/l/cargo-impish.svg)](LICENSE)
+
 The Contract gate for Rust, after [Impatient Programming](https://impatientprogramming.org).
 A sibling of [flinch](https://github.com/tools4imps/flinch) (Go) and
 [covenant](https://github.com/tools4imps/covenant) (Elixir).
@@ -8,6 +13,23 @@ A Contract is what a crate promises: numbered obligations, each proved by a
 tagged contract test. impish fails the build when the Contract stops being true:
 when an obligation has no test, a test names no obligation, a tag is wrong, or
 the tests catch none of the bugs put into the code they cover.
+
+## Why a Contract
+
+A test suite says what the code does today. It doesn't say which of those
+behaviours are promises, and which are accidents that are free to change.
+When a test breaks, you can't tell whether you broke a promise or just a test.
+
+A Contract writes the promises down, one numbered obligation each, next to the
+code they're about: what the code *must* do, and *why*. Every obligation is
+proved by a test that names it, and every contract test names an obligation.
+So the promises and their proofs can't drift apart. A reviewer reads the
+Contract to see what changed in a crate's promises, without reading every
+test.
+
+This is how [Impatient Programming](https://impatientprogramming.org) keeps
+work fast and safe: a change is done when the Contract holds, and a gate, not
+a person, checks that it does. impish is that gate for Rust.
 
 ## Install
 
@@ -82,6 +104,71 @@ cargo impish mutate add  # every obligation's tests catch a bug in the code
 | `cargo impish check --write` | Also writes `contract/coverage.json`, the published coverage. Once it exists, `check` fails when it's out of date. |
 | `cargo impish mutate <primitive>` | Breaks the code the primitive's covers block names with [cargo-mutants](https://mutants.rs), on a copy of the project, and credits each kill to the obligations whose tests caught it. Fails on an obligation whose tests catch nothing. Needs `cargo install cargo-mutants`. |
 
+## When it fails
+
+`check` reports every problem at once, then exits 1:
+
+```text
+$ cargo impish check
+calc::subtracts names no obligation
+calc/A2 has no test
+calc/A3 has no test
+The Contract is not met.
+```
+
+| Message | Fix |
+| --- | --- |
+| `<test> names no obligation` | Replace `#[test]` with `#[impish::contract("<primitive>/A<n>")]`. Every test in `tests/contract/` proves something, or it belongs elsewhere. |
+| `<primitive>/A<n> has no test` | Write a test that proves it, or retire the obligation if it's no longer a promise. |
+| `contract/coverage.json is out of date` | Run `cargo impish check --write` and commit the result. |
+| `…: covers <file>::<fn>, which doesn't exist` | The function was renamed or moved. Update the covers block. |
+
+A tag that names no obligation stops at `cargo test`, before `check` runs:
+
+```text
+error: `calc/A9`: contract/calc/README.md doesn't declare A9
+ --> tests/contract/calc.rs:1:20
+  |
+1 | #[impish::contract("calc/A9")]
+  |                    ^^^^^^^^^
+```
+
+## Reading the kill matrix
+
+`check` proves every obligation has a test. `mutate` proves the tests would
+notice a bug. It breaks the covered code one change at a time (a mutant), runs
+the primitive's contract tests, and credits each failure to the obligations
+the failing tests name:
+
+```text
+$ cargo impish mutate calc
+calc: 10 mutants of 2 functions, 3 tests
+  src/lib.rs:2:7: replace + with - in add  killed by calc/A1
+  src/lib.rs:6:5: replace sub -> i32 with 1  SURVIVED
+  src/lib.rs:6:7: replace - with / in sub  SURVIVED
+  …
+8 killed, 2 survived, 0 timed out, 0 unviable
+
+  obligation  killed  unique
+  calc/A1          5       5
+  calc/A2          3       3
+  calc/A3          0       0
+calc/A3 is hollow: its tests catch none of the mutants
+The Contract is not met.
+```
+
+- **killed:** mutants this obligation's tests caught.
+- **unique:** mutants *only* this obligation's tests caught. An obligation
+  with kills but no unique kills is proved only by bugs other obligations
+  already catch. That's fine for a non-functional promise, but worth a look
+  for a functional one.
+- **hollow:** an obligation with no kills at all. Its tests pass whatever the
+  code does, so they prove nothing. Assert on the result, or retire the
+  obligation.
+- **SURVIVED:** a bug no contract test caught. Here the only test is
+  `sub(3, 2) == 1`, and `3 / 2` and a constant `1` give 1 too. A second
+  case, say `sub(5, 2) == 3`, kills both.
+
 ## The Contract format
 
 An obligation is a `### A<n> — <title>` block under `## Obligations` with
@@ -104,16 +191,87 @@ impish holds itself to its own Contract: [contract/README.md](contract/README.md
 describes the format in full, and each `contract/<primitive>/README.md` is a
 working example.
 
+## Changing a Contract
+
+A Contract only grows by append, so an obligation's tag means the same thing
+forever, in old commits, issues and PR reviews alike.
+
+- **Adding a promise:** give it the next number, write its test first and
+  watch it fail, then make it pass. `check` won't pass until the test exists.
+- **Changing a promise:** edit `must` in place when the promise is the same
+  but better worded. When the behaviour itself changes, retire the old
+  obligation and add a new one, so the history shows the promise changed.
+- **Dropping a promise:** set `status: retired`. Keep the block and its
+  number. Its tests must go too: a test naming a retired obligation fails to
+  compile.
+- **Never renumber.** Leave gaps. `A3` retired and `A4` active is a normal
+  Contract.
+
+Run `cargo impish check --write` after any change, and commit
+`contract/coverage.json` with it.
+
 ## In CI
 
+A GitHub Actions workflow that gates every PR on the Contract, and publishes
+its coverage in the job summary:
+
 ```yaml
-- run: cargo install cargo-impish --locked
-- run: cargo test
-- run: cargo impish check
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-impish --locked
+      - run: cargo test
+      - run: cargo impish check
+      - name: Contract coverage
+        run: |
+          jq -r '"**\(.obligations) active obligations**\n",
+                 "| Primitive | Obligations |", "|---|---|",
+                 (.primitives | to_entries[] | "| \(.key) | \(.value.obligations) |")' \
+            contract/coverage.json >> "$GITHUB_STEP_SUMMARY"
 ```
 
-impish's own CI also publishes `contract/coverage.json` in the summary of every
-run, and a nightly job runs `mutate` on every primitive.
+`mutate` runs every test once per mutant, so it is slow for PRs. Run it
+nightly, one job per primitive:
+
+```yaml
+name: Kill matrix
+on:
+  schedule: [{ cron: "0 2 * * *" }]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  primitives:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.ls.outputs.list }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: ls
+        run: echo "list=$(for d in contract/*/; do basename "$d"; done | jq -Rnc '[inputs]')" >> "$GITHUB_OUTPUT"
+  mutate:
+    needs: primitives
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        primitive: ${{ fromJson(needs.primitives.outputs.list) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-impish cargo-mutants --locked
+      - run: cargo impish mutate "${{ matrix.primitive }}"
+```
+
+impish's own [CI](.github/workflows/ci.yml) and
+[kill matrix](.github/workflows/kill-matrix.yml) go further: pinned actions, sharding and a per-test matrix.
 
 ## Contributing
 
