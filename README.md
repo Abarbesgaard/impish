@@ -166,14 +166,17 @@ calc: 10 mutants of 2 functions, 3 tests
   calc/A1          5       5
   calc/A2          3       3
   calc/A3          0       0
+  unique: caught by no other obligation's tests.
+  Tests outside the Contract weren't run; they may catch it too.
 calc/A3 is hollow: its tests catch none of the mutants
 The Contract is not met.
 ```
 
 - **killed:** mutants this obligation's tests caught.
-- **unique:** mutants *only* this obligation's tests caught. An obligation
-  with kills but no unique kills is proved only by bugs other obligations
-  already catch. That's fine for a non-functional promise, but worth a look
+- **unique:** mutants *only* this obligation's tests caught, among the
+  Contract's tests. `mutate` runs only those, so a test outside the Contract
+  may catch a "unique" mutant too. An obligation with kills but no unique
+  kills is proved only by bugs other obligations already catch. That's fine for a non-functional promise, but worth a look
   for a functional one.
 - **hollow:** an obligation with no kills at all. Its tests pass whatever the
   code does, so they prove nothing. Assert on the result, or retire the

@@ -51,6 +51,25 @@ fn kills_are_credited_to_the_obligations_that_caught_them() {
     assert_eq!(p.read("src/lib.rs"), lib, "the project is untouched");
 }
 
+#[impish::contract("mutate/A6")]
+fn the_kill_matrix_says_what_unique_means() {
+    let out = calc_crate(&format!("{ADDS}{DOUBLES}")).mutate("calc");
+    let table = out
+        .stdout
+        .find("  obligation  killed  unique")
+        .expect("a matrix");
+    let legend = out.stdout[table..].lines().skip(3).collect::<Vec<_>>();
+    assert_eq!(
+        legend[..2],
+        [
+            "  unique: caught by no other obligation's tests.",
+            "  Tests outside the Contract weren't run; they may catch it too.",
+        ],
+        "{}",
+        out.stdout
+    );
+}
+
 #[impish::contract("mutate/A2")]
 fn a_hollow_obligation_fails_by_name() {
     let out = calc_crate(&format!("{ADDS}{DOUBLES_NOTHING}")).mutate("calc");
