@@ -37,6 +37,20 @@ repo() {
 }
 commit() { git add -A && git commit -qm "$1"; }
 
+# ── workflows ──────────────────────────────────────────────────────────────
+
+# Without pipefail, `script | tee` takes tee's exit code and a failing gate
+# passes; `shell: bash` turns pipefail on.
+workflows_run_with_pipefail() {
+  local f missing=""
+  for f in "$root"/.github/workflows/*.yml; do
+    awk '/^defaults:/ { d = 1; next } d && /^[^ #]/ { d = 0 } d && /^    shell: bash *$/ { found = 1 } END { exit !found }' "$f" ||
+      missing="$missing $(basename "$f")"
+  done
+  [ -z "$missing" ] || { bad "no top-level defaults.run.shell: bash in:$missing"; return; }
+  ok
+}
+
 # ── scripts ────────────────────────────────────────────────────────────────
 
 scripts_parse() {
@@ -178,7 +192,7 @@ kill_matrix_quiet_tests_exist() {
   ok
 }
 
-cases=$(declare -F | awk '{ print $3 }' | grep -E '^(scripts|shipped|similar_code|kill_matrix)_' |
+cases=$(declare -F | awk '{ print $3 }' | grep -E '^(workflows|scripts|shipped|similar_code|kill_matrix)_' |
   grep -vE '^(kill_matrix_lib)$')
 passed=0 failed=0
 for case in $cases; do
