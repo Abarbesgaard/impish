@@ -8,9 +8,9 @@ name: CI
 #   Format and Clippy ──┐
 #   Dependency policy ──┤
 #   Workflow security ──┤
-#   Similar code (PRs) ─┼───────────────────┬─ CI ── Release (main, new version)
-#   Version (PRs) ──────┤                   │
-#   Test ───────────────┴─ Mutants (PRs) ───┘
+#   Similar code (PRs) ─┼─ Mutants (PRs) ─┬─ CI ── Release (main, new version)
+#   Version (PRs) ──────┤                 │
+#   Test ───────────────┴─────────────────┘
 #
 # Format and Clippy: fmt, clippy, and the pipeline's own scripts (tests/pipeline).
 # Dependency policy: cargo-deny; licences, sources, advisories (deny.toml).
@@ -134,7 +134,8 @@ jobs:
   # is mutated, and a mutant no test catches fails the PR.
   mutants:
     name: Mutants (PR diff)
-    needs: test
+    # The cheap checks first: a format slip shouldn't cost a mutation run.
+    needs: [lint, deny, zizmor, test, similar, version]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
