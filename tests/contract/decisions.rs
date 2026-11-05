@@ -59,6 +59,16 @@ fn malformed_records_fail_check_naming_the_file_and_line() {
     ));
     let out = p.check();
     assert!(!out.stderr.contains("decisions.toml"), "{}", out.stderr);
+    p.write(
+        "contract/decisions.toml",
+        &record("D1", "expires = 2030-01-01T10:00:00"),
+    );
+    let timed = p.check();
+    assert!(
+        timed.reports("contract/decisions.toml:1: `expires` must be a date"),
+        "{}",
+        timed.stderr
+    );
     p.write("contract/decisions.toml", "[[record]\n");
     assert!(p.check().stderr.contains("contract/decisions.toml:1: "));
 }
