@@ -275,8 +275,18 @@ impl Project {
         self.mutate_args(&[&[primitive], args].concat())
     }
 
-    /// `cargo impish mutate` with `args`, which may name no primitive.
+    /// `cargo impish mutate` with `args`, which may name no primitive, one
+    /// mutant at a time unless `args` say otherwise: tests already run at
+    /// once, and each extra copy builds its own target directory.
     pub fn mutate_args(&self, args: &[&str]) -> Checked {
+        if args.iter().any(|a| a.starts_with("-j") || *a == "--jobs") {
+            return self.mutate_any_jobs(args);
+        }
+        self.mutate_any_jobs(&[args, &["-j", "1"]].concat())
+    }
+
+    /// `cargo impish mutate` with exactly `args`.
+    pub fn mutate_any_jobs(&self, args: &[&str]) -> Checked {
         let out = Command::new(env!("CARGO_BIN_EXE_cargo-impish"))
             .arg("mutate")
             .args(args)

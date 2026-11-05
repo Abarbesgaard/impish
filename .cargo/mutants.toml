@@ -6,6 +6,6 @@ test_workspace = true
 # The timeout on a mutated test run only shows when a mutant hangs, and a
 # test that waits out a hang costs more than the check is worth.
 exclude_re = [
-    "replace \\* with / in run$",
+    "replace \\* with / in mutate$",
     "replace > with (==|>=) in Scratch::test$",
 ]

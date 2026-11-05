@@ -41,6 +41,10 @@ enum Command {
         /// primitive, fail on each whose catches the Contract all makes.
         #[arg(long)]
         whole_suite: bool,
+        /// How many mutants to try at once, each in its own copy of the
+        /// project; half the cores when left out.
+        #[arg(short, long, value_name = "N")]
+        jobs: Option<usize>,
         /// Record in contract/coverage.json whether the primitive's mutate is
         /// met; `check` fails once what it rests on changes.
         #[arg(long)]
@@ -86,6 +90,7 @@ fn run() -> anyhow::Result<ExitCode> {
             primitive,
             since,
             whole_suite,
+            jobs,
             write,
             format,
         } => mutate::run(
@@ -95,6 +100,7 @@ fn run() -> anyhow::Result<ExitCode> {
             whole_suite,
             write,
             format == Format::Json,
+            jobs.unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get() / 2)),
         ),
     }
 }

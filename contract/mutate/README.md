@@ -108,6 +108,12 @@ must catch at least one mutant too.
 - **kind:** functional
 - **status:** active
 
+### A17 — Mutants are tried at once
+- **must:** with `-j <n>`, try up to n mutants at once, each in its own copy of the project with its own target directory, and report the same outcomes in the same order as one at a time; with no `-j`, use half the cores, at least one
+- **why:** each mutant is independent, so trying them one by one leaves most cores idle (#70)
+- **kind:** non-functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate.rs::primitives
@@ -119,6 +125,7 @@ src/mutate/since.rs::hunk
 src/mutate.rs::finish
 src/mutate/record.rs::record
 src/mutate/suite.rs::tally
+src/mutate/pool.rs::each
 src/mutate/suite.rs::merge
 src/mutate/suite.rs::duplicates
 src/mutate/suite.rs::duplicate

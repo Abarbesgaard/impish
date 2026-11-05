@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, anyhow, bail};
@@ -13,12 +13,15 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 mod judge;
+mod list;
+mod pool;
 mod record;
 mod scratch;
 mod since;
 mod suite;
 
 use judge::{Verdict, judge};
+use list::{cargo, list};
 use record::record;
 use scratch::Scratch;
 use since::Changes;
@@ -69,7 +72,8 @@ enum Outcome {
 
 /// Mutates the primitive, or every primitive that covers code; with a
 /// `since` ref, only the mutants on lines changed since its merge base; with
-/// the `whole` suite, the tests outside the Contract too.
+/// the `whole` suite, the tests outside the Contract too; up to `jobs`
+/// mutants at once.
 pub fn run(
     root: &Path,
     primitive: Option<&str>,
@@ -77,6 +81,7 @@ pub fn run(
     whole: bool,
     write: bool,
     json: bool,
+    jobs: usize,
 ) -> anyhow::Result<ExitCode> {
     let names = match primitive {
         Some(name) => vec![name.to_string()],
@@ -86,9 +91,16 @@ pub fn run(
     let mut met = true;
     let mut docs = Map::new();
     let mut outside = Outside::new();
+    let opts = Opts {
+        every: primitive.is_none(),
+        changes: changes.as_ref(),
+        whole,
+        write,
+        json,
+        jobs: jobs.max(1),
+    };
     for name in &names {
-        let every = primitive.is_none();
-        let ran = mutate(root, name, every, changes.as_ref(), whole, write, json)?;
+        let ran = mutate(root, name, opts)?;
         if let Some(ran) = ran {
             met &= ran.problems.is_empty();
             docs.insert(name.clone(), ran.json);
@@ -142,6 +154,17 @@ fn primitives(root: &Path) -> anyhow::Result<Vec<String>> {
     Ok(names)
 }
 
+/// How each primitive is mutated.
+#[derive(Clone, Copy)]
+struct Opts<'a> {
+    every: bool,
+    changes: Option<&'a Changes>,
+    whole: bool,
+    write: bool,
+    json: bool,
+    jobs: usize,
+}
+
 /// What one primitive's run found.
 struct Ran {
     problems: Vec<String>,
@@ -151,15 +174,15 @@ struct Ran {
 
 /// Mutates one primitive and reports it; `None` when `every` primitive is
 /// being mutated and this one covers no code.
-fn mutate(
-    root: &Path,
-    primitive: &str,
-    every: bool,
-    changes: Option<&Changes>,
-    whole: bool,
-    write: bool,
-    json: bool,
-) -> anyhow::Result<Option<Ran>> {
+fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran>> {
+    let Opts {
+        every,
+        changes,
+        whole,
+        write,
+        json,
+        jobs,
+    } = opts;
     let readme_file = format!("contract/{primitive}/README.md");
     let readme =
         fs::read_to_string(root.join(&readme_file)).with_context(|| format!("no {readme_file}"))?;
@@ -250,7 +273,10 @@ fn mutate(
             )));
         }
     }
-    let scratch = Scratch::copy(root, whole)?;
+    let scratches = (0..jobs.min(mutants.len()))
+        .map(|worker| Scratch::copy(root, whole, worker))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let scratch = &scratches[0];
     let built = scratch
         .build()?
         .ok_or_else(|| anyhow!("the tests don't build"))?;
@@ -269,7 +295,8 @@ fn mutate(
             failed.join(", ")
         );
     }
-    let timeout = started.elapsed() * 5 + Duration::from_secs(10);
+    // Mutants tried at once share the CPU, so each runs slower than this.
+    let timeout = started.elapsed() * 5 * scratches.len() as u32 + Duration::from_secs(10);
     if !json {
         println!(
             "{primitive}: {} mutants of {} functions, {} tests",
@@ -282,9 +309,13 @@ fn mutate(
     let mut outcomes = Vec::new();
     let mut caught = Vec::new();
     let mut outside = Outside::new();
-    for mutant in &mutants {
-        let (outcome, by_outside) =
-            scratch.try_mutant(mutant, primitive, timeout, &tags, &active)?;
+    let work = |scratch: &Scratch, i: usize| {
+        scratch.try_mutant(&mutants[i], primitive, timeout, &tags, &active)
+    };
+    let mut i = 0;
+    pool::each(&scratches, mutants.len(), work, |(outcome, by_outside)| {
+        let mutant = &mutants[i];
+        i += 1;
         let mut verdict = match &outcome {
             Outcome::Killed { by, .. } => {
                 format!(
@@ -308,7 +339,7 @@ fn mutate(
         suite::tally(&mut outside, &outcome, &by_outside);
         caught.push(by_outside);
         outcomes.push(outcome);
-    }
+    })?;
     let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
     let tests: Vec<&str> = tags.keys().map(String::as_str).collect();
     let verdict = judge(&active, &tests, &tried, &declared, &declared_file, full);
@@ -381,39 +412,4 @@ fn finish(
         json: doc,
         outside: Outside::new(),
     }
-}
-
-/// The mutants cargo-mutants makes of the covered functions, in its order.
-fn list(root: &Path, targets: &[(&str, &str)]) -> anyhow::Result<Vec<Mutant>> {
-    let files: BTreeSet<&str> = targets.iter().map(|(file, _)| *file).collect();
-    let mut cmd = Command::new(cargo());
-    cmd.args(["mutants", "--list", "--json", "--workspace"])
-        .current_dir(root);
-    for file in &files {
-        cmd.args(["--file", file]);
-    }
-    let out = cmd
-        .output()
-        .context("run `cargo mutants`; is cargo-mutants installed?")?;
-    if !out.status.success() {
-        bail!(
-            "`cargo mutants --list` failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    let all: Vec<Mutant> =
-        serde_json::from_slice(&out.stdout).context("read `cargo mutants --list --json`")?;
-    Ok(all
-        .into_iter()
-        .filter(|m| {
-            let name = m.function.as_ref().map_or("", |f| f.function_name.as_str());
-            targets.iter().any(|(file, func)| {
-                m.file == *file && (name == *func || name.ends_with(&format!("::{func}")))
-            })
-        })
-        .collect())
-}
-
-fn cargo() -> String {
-    std::env::var("CARGO").unwrap_or_else(|_| "cargo".into())
 }
