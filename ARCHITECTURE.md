@@ -32,6 +32,8 @@ src/
     since.rs    what changed since a git ref, for `mutate --since`
     suite.rs    witnesses and duplicates outside the Contract, for `--whole-suite`
     record.rs   the mutate result `--write` leaves in coverage.json
+    pool.rs     tries mutants on several scratch copies at once, for `-j`
+    list.rs     the mutants cargo-mutants makes of the covered code
   contract.rs   reads covers and surface blocks, mutants.md declarations, and
                 #[impish::contract] tags with syn
 ```

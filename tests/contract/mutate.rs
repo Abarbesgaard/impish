@@ -1,3 +1,4 @@
+use std::fs;
 use std::time::{Duration, SystemTime};
 
 use crate::harness::{NOT_MET, Project, calc_crate, readme, test_fn};
@@ -652,4 +653,40 @@ fn whole_suite_fails_on_duplicates() {
     p.commit();
     let out = p.mutate_args(&["--whole-suite", "--since", "HEAD"]);
     assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
+}
+
+#[impish::contract("mutate/A17")]
+fn jobs_try_mutants_at_once_in_order() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    let copies = || {
+        (0..64)
+            .filter(|i| {
+                let name = if *i == 0 {
+                    "project".to_string()
+                } else {
+                    format!("project-{i}")
+                };
+                p.path().join("target/impish/mutate").join(name).is_dir()
+            })
+            .count()
+    };
+
+    let serial = p.mutate_with("calc", &["-j", "1"]);
+    let parallel = p.mutate_with("calc", &["-j", "3"]);
+
+    assert_eq!(parallel.code, Some(1), "{}", parallel.stderr);
+    assert_eq!(parallel.stdout, serial.stdout);
+    assert_eq!(parallel.stderr, serial.stderr);
+    assert_eq!(copies(), 3);
+
+    fs::remove_dir_all(p.path().join("target/impish/mutate")).unwrap();
+    let mutants = parallel
+        .stdout
+        .lines()
+        .filter(|l| l.starts_with("  src/"))
+        .count();
+    let half = std::thread::available_parallelism().map_or(1, |n| n.get() / 2);
+    let out = p.mutate_any_jobs(&["calc"]);
+    assert_eq!(out.stdout, serial.stdout);
+    assert_eq!(copies(), half.clamp(1, mutants));
 }

@@ -36,8 +36,9 @@ fn mutated(src: &str, span: &Span, replacement: &str) -> anyhow::Result<String> 
 }
 
 /// A copy of the project to mutate, so the real one is never touched. Builds
-/// share one target directory, `impish-mutate` under `CARGO_TARGET_DIR` or
-/// the project's `target/`, so each mutant only rebuilds what it changed.
+/// of one copy share one target directory, `impish-mutate` (then
+/// `impish-mutate-1`, …) under `CARGO_TARGET_DIR` or the project's `target/`,
+/// so each mutant only rebuilds what it changed.
 pub(super) struct Scratch {
     dir: PathBuf,
     target: PathBuf,
@@ -53,16 +54,23 @@ pub(super) struct Built {
 }
 
 impl Scratch {
-    pub(super) fn copy(root: &Path, whole: bool) -> anyhow::Result<Self> {
+    /// The `worker`th copy; each has its own directory and target directory,
+    /// so copies can build at once.
+    pub(super) fn copy(root: &Path, whole: bool, worker: usize) -> anyhow::Result<Self> {
+        let suffix = if worker == 0 {
+            String::new()
+        } else {
+            format!("-{worker}")
+        };
         let base = root.join("target/impish/mutate");
-        let dir = base.join("project");
+        let dir = base.join(format!("project{suffix}"));
         if dir.exists() {
             fs::remove_dir_all(&dir).context("clear the scratch copy")?;
         }
         copy_dir(root, &dir, true).context("copy the project to mutate")?;
         let target = std::env::var_os("CARGO_TARGET_DIR")
             .map_or_else(|| root.join("target"), PathBuf::from)
-            .join("impish-mutate");
+            .join(format!("impish-mutate{suffix}"));
         Ok(Self { dir, target, whole })
     }
 
