@@ -186,14 +186,11 @@ fn a_primitive_missing_a_file_fails_naming_it() {
 }
 
 #[impish::contract("check/A7")]
-fn check_finds_the_contract_above_the_current_directory() {
+fn check_finds_the_contract_above_and_fails_without_one() {
     let p = calc(&["A1"], &test_fn("adds", &["calc/A1"]));
     let out = p.check_in("tests/contract");
     assert_eq!(out.code, Some(0), "{}", out.stderr);
-}
 
-#[impish::contract("check/A7")]
-fn check_without_a_contract_fails() {
     let out = Project::new().check();
     assert_eq!(out.code, Some(2));
     assert!(out.stderr.contains("no contract/"), "{}", out.stderr);

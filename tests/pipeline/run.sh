@@ -53,12 +53,14 @@ workflows_run_with_pipefail() {
 
 # A mutation run takes minutes; a format slip shouldn't wait for one to be found.
 workflows_mutate_after_the_cheap_checks() {
-  local needs want missing=""
-  needs=$(awk '/^  mutants:/ { m = 1; next } m && /^  [a-z]/ { m = 0 } m && /^    needs:/ { print; exit }' "$root/.github/workflows/ci.yml")
-  for want in lint deny zizmor test similar version; do
-    case "$needs" in *"$want"*) ;; *) missing="$missing $want" ;; esac
+  local job needs want missing=""
+  for job in mutants contract-mutants; do
+    needs=$(awk -v j="  $job:" '$0 == j { m = 1; next } m && /^  [a-z]/ { m = 0 } m && /^    needs:/ { print; exit }' "$root/.github/workflows/ci.yml")
+    for want in lint deny zizmor test similar version; do
+      case "$needs" in *"$want"*) ;; *) missing="$missing $job:$want" ;; esac
+    done
   done
-  [ -z "$missing" ] || { bad "mutants doesn't need:$missing"; return; }
+  [ -z "$missing" ] || { bad "a mutation job doesn't need:$missing"; return; }
   ok
 }
 

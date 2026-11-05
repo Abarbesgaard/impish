@@ -151,6 +151,7 @@ src/contract.rs::surface
 src/check.rs::real_surface
 src/check.rs::coverage
 src/check.rs::mutate_results
+src/main.rs::root
 ```
 
 ```surface
