@@ -322,6 +322,18 @@ fn defines(root: &Path, file: &str, func: &str) -> bool {
     })
 }
 
+/// `file` relative to `root`, with `/` between its parts on every platform,
+/// as the Contract names files.
+fn relative(root: &Path, file: &Path) -> String {
+    let parts: Vec<_> = file
+        .strip_prefix(root)
+        .unwrap_or(file)
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect();
+    parts.join("/")
+}
+
 /// Tags in `src/` and `tests/` outside the primitives' test files.
 fn stray_tags(root: &Path, names: &[String]) -> Vec<String> {
     let mut files = Vec::new();
@@ -335,7 +347,7 @@ fn stray_tags(root: &Path, names: &[String]) -> Vec<String> {
     let mut problems = Vec::new();
     for file in files.iter().filter(|file| !homes.contains(file)) {
         let src = fs::read_to_string(file).unwrap_or_default();
-        let rel = file.strip_prefix(root).unwrap_or(file).display();
+        let rel = relative(root, file);
         for n in contract_attributes(&src) {
             problems.push(format!(
                 "{rel}:{n}: an #[impish::contract] attribute outside tests/contract/<primitive>.rs"
@@ -360,7 +372,7 @@ fn stray_tests(root: &Path, names: &[String]) -> Vec<String> {
             continue;
         }
         let src = fs::read_to_string(file).unwrap_or_default();
-        let rel = file.strip_prefix(root).unwrap_or(file).display();
+        let rel = relative(root, file);
         for n in test_attributes(&src) {
             problems.push(format!(
                 "{rel}:{n}: a test outside tests/contract/<primitive>.rs"
