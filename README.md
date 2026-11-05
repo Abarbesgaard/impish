@@ -115,6 +115,7 @@ cargo impish mutate add  # every obligation's tests catch a bug in the code
 | `cargo impish check` | Holds the Contract to its tests. Reports every problem on stderr and exits 1, or says how many obligations held and exits 0. Reads only. |
 | `cargo impish check --write` | Also writes `contract/coverage.json`, the published coverage. Once it exists, `check` fails when it's out of date. |
 | `cargo impish mutate <primitive>` | Breaks the code the primitive's covers block names with [cargo-mutants](https://mutants.rs), on a copy of the project, and credits each kill to the obligations whose tests caught it. Fails on an obligation whose tests catch nothing. Needs `cargo install cargo-mutants`. |
+| `cargo impish mutate <primitive> --write` | Also records in `contract/coverage.json` whether the primitive's mutate is met, with a fingerprint of its README, `mutants.md`, contract tests and covered files. `check` keeps the result and fails once any of those change. |
 | `--format json` | On `check` or `mutate`: prints one JSON document on stdout instead of the text, with `version`, `met`, every problem, and the counts (for `mutate`, every mutant's outcome and the tests that caught it). Exits the same way. |
 
 ## When it fails
@@ -140,6 +141,7 @@ The Contract is not met.
 | `<test> names no obligation` | Add `#[impish::contract("<primitive>/A<n>")]` under its `#[test]`. Every test in `tests/contract/` proves something, or it belongs elsewhere. |
 | `<primitive>/A<n> has no test` | Write a test that proves it, or retire the obligation if it's no longer a promise. |
 | `contract/coverage.json is out of date` | Run `cargo impish check --write` and commit the result. |
+| `…: the mutate result for <primitive> is stale` | Its Contract, tests or covered code changed since `mutate --write`. Run `cargo impish mutate <primitive> --write` and commit the result. |
 | `…: covers <file>::<fn>, which doesn't exist` | The function was renamed or moved. Update the covers block. |
 | `<file>:<line>: a test outside tests/contract/<primitive>.rs` | A test in `main.rs`, a helper, or a file with no `contract/<name>/README.md`. Give it a Contract, or move it out of `tests/contract/`. |
 

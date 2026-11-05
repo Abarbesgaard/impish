@@ -31,6 +31,10 @@ enum Command {
     Mutate {
         /// The primitive, a directory under contract/.
         primitive: String,
+        /// Record in contract/coverage.json whether the primitive's mutate is
+        /// met; `check` fails once what it rests on changes.
+        #[arg(long)]
+        write: bool,
         #[arg(long, value_enum, default_value_t = Format::Text)]
         format: Format,
     },
@@ -68,8 +72,10 @@ fn run() -> anyhow::Result<ExitCode> {
     let cwd = std::env::current_dir()?;
     match Cli::parse_from(args).command {
         Command::Check { write, format } => check::run(root(&cwd)?, write, format == Format::Json),
-        Command::Mutate { primitive, format } => {
-            mutate::run(root(&cwd)?, &primitive, format == Format::Json)
-        }
+        Command::Mutate {
+            primitive,
+            write,
+            format,
+        } => mutate::run(root(&cwd)?, &primitive, write, format == Format::Json),
     }
 }

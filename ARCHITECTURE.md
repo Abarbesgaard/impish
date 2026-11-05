@@ -59,7 +59,8 @@ impish holds its own Contract, in the layout it checks in other crates:
 ```
 contract/README.md               the format
 contract/<primitive>/README.md   purpose, obligations, covers and surface blocks
-contract/coverage.json           published coverage, rewritten by `check --write`
+contract/coverage.json           published coverage, rewritten by `check --write`;
+                                 `mutate --write` adds each mutate result
 tests/contract/<primitive>.rs    the tests that prove the obligations
 ```
 
