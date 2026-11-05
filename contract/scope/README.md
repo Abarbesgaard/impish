@@ -22,14 +22,9 @@ covenant's scope ceilings.
 - **status:** active
 
 ### A3 — Every count is reported
-- **must:** when the Contract holds, print each ceiling as `<name>: <count> of at most <ceiling>` after the summary, and record each under `scope` in `contract/coverage.json` with what it `counts` and its `ceiling`, but not its count
+- **must:** when the Contract holds, print each ceiling as `<name>: <count> of at most <ceiling>` after the summary, and record each under `scope` in `contract/coverage.json` with what it `counts` and its `ceiling`, but not its count; with no `contract/scope.toml`, print and record nothing about scope
 - **why:** a ceiling should be seen coming, not only hit; a recorded count would make `coverage.json` stale on every edit
 - **kind:** persisted-format
-- **status:** active
-
-### A4 — No scope.toml, no ceilings
-- **must:** check and report nothing about scope when `contract/scope.toml` doesn't exist
-- **kind:** functional
 - **status:** active
 
 ```covers

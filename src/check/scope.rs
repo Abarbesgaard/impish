@@ -84,7 +84,6 @@ pub fn scope(root: &Path) -> Scope {
 
 fn ceiling(root: &Path, files: &[String], at: &str, fields: &Table, scope: &mut Scope) {
     let problems = &mut scope.problems;
-    let before = problems.len();
     for key in fields.keys().filter(|k| !FIELDS.contains(&k.as_str())) {
         problems.push(format!("{at}: unknown field `{key}`"));
     }
@@ -131,9 +130,6 @@ fn ceiling(root: &Path, files: &[String], at: &str, fields: &Table, scope: &mut 
     else {
         return;
     };
-    if problems.len() > before {
-        return;
-    }
     let read = |file: &&String| fs::read_to_string(root.join(file)).unwrap_or_default();
     let count = match counts {
         "files" => matched.len(),

@@ -1,11 +1,11 @@
 {
   "kinds": {
-    "functional": 51,
+    "functional": 50,
     "non-functional": 2,
     "persisted-format": 8,
     "security": 5
   },
-  "obligations": 66,
+  "obligations": 65,
   "primitives": {
     "attribute": {
       "obligations": 6,
@@ -42,7 +42,7 @@
       ]
     },
     "scope": {
-      "obligations": 4,
+      "obligations": 3,
       "surface": []
     }
   },

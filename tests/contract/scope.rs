@@ -121,13 +121,10 @@ fn every_count_is_reported() {
             "tests": {"counts": "lines", "ceiling": 99},
         })
     );
-}
-
-#[impish::contract("scope/A4")]
-fn no_scope_toml_reports_nothing_about_scope() {
     let p = calc(&["A1"], &test_fn("adds", &["calc/A1"]));
+    let out = p.check();
     assert_eq!(
-        p.check().stdout,
+        out.stdout,
         "The Contract holds: 1 obligations across 1 primitives.\n"
     );
     assert_eq!(p.run(&["check", "--write"]).code, Some(0));
