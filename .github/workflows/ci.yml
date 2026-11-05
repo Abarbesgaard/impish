@@ -154,11 +154,8 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
         with:
-          tool: cargo-mutants,cargo-nextest
-      # nextest's mutants profile stops at a mutant's first failing test.
-      - run: cargo mutants --workspace --no-shuffle -vV --in-place --test-tool nextest --in-diff git.diff
-        env:
-          NEXTEST_PROFILE: mutants
+          tool: cargo-mutants
+      - run: cargo mutants --workspace --no-shuffle -vV --in-place --in-diff git.diff
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
