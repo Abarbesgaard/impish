@@ -24,6 +24,12 @@ Dependencies point inwards: `cargo-impish` and `impish` both depend on
 src/
   main.rs       parses the command line (clap) and finds the nearest contract/
   check.rs      `cargo impish check`: holds the Contract to its tests, writes coverage
+  check/
+    stray.rs    contract tags and tests outside the primitives' test files
+  conditions.rs `cargo impish conditions`: re-checks the decision records' conditions
+  decisions.rs  reads decision records from contract/, checks their shape and references
+  decisions/
+    evaluate.rs judges one condition: dep, env, file or rustc
   mutate.rs     `cargo impish mutate`: a kill matrix per obligation, via cargo-mutants;
                 every mutant caught or declared in mutants.md
   mutate/
@@ -39,8 +45,10 @@ src/
 ```
 
 `main` calls the commands; `check` and `mutate` both build on `contract`, never
-on each other; `contract` does no I/O. Only the commands read or write files,
-run processes or print, and only `check` reads `impish.toml`. `main` prints
+on each other; `check` and `conditions` both build on `decisions`, which knows
+neither; `contract` does no I/O. Only the commands read or write files,
+run processes or print, and only `check` (`impish.toml`) and `decisions`
+(`decisions.toml`, `Cargo.lock`) read TOML. `main` prints
 one thing: the error that stopped a run, which exits 2 (undecided), not 1
 (not met).
 

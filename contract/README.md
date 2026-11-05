@@ -17,6 +17,7 @@ and never renumbered:
 ### A1 — A held Contract passes
 - **must:** say how many obligations were checked, and exit 0
 - **why:** optional; the reason the obligation exists
+- **record:** optional; the decision records behind it, such as D3, D7
 - **kind:** functional
 - **status:** active
 ```
