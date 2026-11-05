@@ -76,6 +76,19 @@ workflows_gate_needs_every_job() {
   ok
 }
 
+workflows_cache_saves_from_main_only() {
+  local f bad_steps=""
+  for f in "$root"/.github/workflows/*.yml; do
+    bad_steps="$bad_steps$(awk -v f="${f##*/}" '
+      /uses: Swatinem\/rust-cache@/ { if (open) print f ":" at; open = 1; at = NR; next }
+      open && /save-if: (false|\$\{\{ github.ref == .refs\/heads\/main. \}\})$/ { open = 0; next }
+      open && /^      - / { print f ":" at; open = 0 }
+      END { if (open) print f ":" at }' "$f")"
+  done
+  [ -z "$bad_steps" ] || { bad "rust-cache saves off main at:" "$bad_steps"; return; }
+  ok
+}
+
 # ── scripts ────────────────────────────────────────────────────────────────
 
 scripts_parse() {
