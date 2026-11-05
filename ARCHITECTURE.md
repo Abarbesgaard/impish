@@ -82,11 +82,15 @@ merges itself (rule 27).
 |---|---|
 | Format, Clippy | CI `lint` |
 | Tests, then `cargo impish check` on impish itself | CI `test` |
+| The suite on macOS and Windows | CI `portability` |
 | Architecture: the dependency directions and boundaries above, file size | `tests/architecture.rs` ([0008](docs/decisions/0008-architecture-rules-are-tests-not-obligations.md)) |
 | Dependency licences, sources and advisories | CI `deny`, `deny.toml`; nightly `audit.yml` |
 | Workflow security | CI `zizmor` |
+| No unused dependency | CI `lint`, `cargo machete` |
 | Every changed line is mutated, and a survivor fails | CI `mutants` |
+| Impish's own `mutate --since` holds each primitive a PR touches (rule 20) | CI `contract-mutants` |
 | No new near-duplicate functions | CI `similar`, `scripts/similar-code.sh` |
+| Existing near-duplicates become issues, one per cluster | nightly `similar-backlog.yml`, `scripts/similar-backlog.sh` |
 | A change to what ships (`scripts/shipped.sh`) bumps the version | CI `version` ([0006](docs/decisions/0006-every-green-merge-is-a-release.md)) |
 | PR titles are `fix:` (with `bug`) or `refine:` (rule 9) | `pr-title.yml` |
 | Issues start from obligations: Refinement and Bug forms, no blank issues (rules 1, 20, 28) | `.github/ISSUE_TEMPLATE/` ([0009](docs/decisions/0009-every-issue-starts-from-a-contract.md)) |

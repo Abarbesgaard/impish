@@ -97,6 +97,15 @@ workflows_cache_saves_from_main_only() {
   ok
 }
 
+# shellcheck disable=SC2016 # the workflow's ${GITHUB_STEP_SUMMARY}, literally
+workflows_similar_backlog_runs_nightly() {
+  local f="$root/.github/workflows/similar-backlog.yml"
+  grep -q '^  schedule:' "$f" || { bad "similar-backlog.yml runs on no schedule"; return; }
+  grep -qF 'scripts/similar-backlog.sh --file-issues | tee -a "${GITHUB_STEP_SUMMARY}"' "$f" ||
+    { bad "similar-backlog.yml doesn't put the report in the job summary"; return; }
+  ok
+}
+
 # ── scripts ────────────────────────────────────────────────────────────────
 
 scripts_parse() {
@@ -200,6 +209,61 @@ similar_code_passes_without_rust_changes() {
   local out rc
   out=$(similar); rc=$?
   expect_exit $rc 0 "$out" && expect_has "$out" "no Rust source changed" && ok
+}
+
+# similar-backlog.sh: a~b and b~c make one cluster of three, d~e one of two,
+# f~g is declared, h~i, j~k and l~m make three more. gh files into .created and lists
+# what .filed holds.
+backlog_repo() {
+  repo backlog
+  fake_similarity
+  cp "$root/scripts/similar-backlog.sh" scripts/
+  echo 'src/lib.rs::g src/lib.rs::f  # intended' > scripts/similar-code.allow
+  local x y
+  while read -r x y; do
+    echo "src/lib.rs:1-1 $x src/lib.rs:2-2 $y 95.00%" >> .pairs
+  done <<'PAIRS'
+b a
+b c
+d e
+f g
+h i
+j k
+l m
+PAIRS
+  cat > "$work/bin/gh" <<'FAKE'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "issue list") cat .filed 2>/dev/null ;;
+  "issue create") while [ $# -gt 0 ]; do [ "$1" = --title ] && echo "$2" >> .created; shift; done ;;
+esac
+FAKE
+  chmod +x "$work/bin/gh"
+}
+
+backlog() { PATH="$work/bin:$PATH" "$sh" scripts/similar-backlog.sh "$@" 2>&1; }
+
+similar_code_backlog_prints_clusters_largest_first() {
+  backlog_repo
+  local out rc
+  out=$(backlog); rc=$?
+  expect_exit $rc 0 "$out" && expect_lacks "$out" "::f" &&
+    expect_has "$out" "5 cluster(s)" || return
+  [ "$(printf '%s\n' "$out" | grep 'similar functions:' | head -2)" = "3 similar functions: src/lib.rs::a, src/lib.rs::b, src/lib.rs::c
+2 similar functions: src/lib.rs::d, src/lib.rs::e" ] || { bad "clusters out of order" "$out"; return; }
+  expect_has "$out" "  src/lib.rs:1-1 \`b\` ~ src/lib.rs:2-2 \`c\`: 95.00%" && ok
+}
+
+similar_code_backlog_files_three_new_clusters() {
+  backlog_repo
+  echo 'Similar code: src/lib.rs::d, src/lib.rs::e' > .filed
+  local out rc
+  out=$(backlog --file-issues); rc=$?
+  expect_exit $rc 0 "$out" || return
+  [ "$(cat .created)" = "Similar code: src/lib.rs::a, src/lib.rs::b, src/lib.rs::c
+Similar code: src/lib.rs::h, src/lib.rs::i
+Similar code: src/lib.rs::j, src/lib.rs::k" ] || { bad "filed the wrong issues" "$(cat .created)"; return; }
+  ok
 }
 
 # ── kill-matrix.sh ─────────────────────────────────────────────────────────
