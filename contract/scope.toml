@@ -1,0 +1,30 @@
+# Ceilings on what impish may grow to; `cargo impish check` counts them.
+# See contract/scope/README.md.
+
+[[ceiling]]
+name = "primitives"
+counts = "files"
+glob = "contract/*/README.md"
+ceiling = 12
+why = "each primitive is a promise someone has to read"
+
+[[ceiling]]
+name = "source files"
+counts = "files"
+glob = "{src,core/src}/**/*.rs"
+ceiling = 30
+why = "one person should be able to know every file"
+
+[[ceiling]]
+name = "source lines"
+counts = "lines"
+glob = "{src,core/src}/**/*.rs"
+ceiling = 4000
+why = "one person should be able to read all of it"
+
+[[ceiling]]
+name = "functions"
+counts = "functions"
+glob = "{src,core/src}/**/*.rs"
+ceiling = 150
+why = "every function is something to understand and to keep proved"

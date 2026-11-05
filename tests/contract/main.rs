@@ -7,3 +7,4 @@ mod decisions;
 mod harness;
 mod mutate;
 mod regen;
+mod scope;

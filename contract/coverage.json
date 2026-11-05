@@ -1,11 +1,11 @@
 {
   "kinds": {
-    "functional": 49,
+    "functional": 50,
     "non-functional": 2,
-    "persisted-format": 6,
+    "persisted-format": 8,
     "security": 5
   },
-  "obligations": 62,
+  "obligations": 65,
   "primitives": {
     "attribute": {
       "obligations": 6,
@@ -40,6 +40,28 @@
       "surface": [
         "cli regen"
       ]
+    },
+    "scope": {
+      "obligations": 3,
+      "surface": []
+    }
+  },
+  "scope": {
+    "functions": {
+      "ceiling": 150,
+      "counts": "functions"
+    },
+    "primitives": {
+      "ceiling": 12,
+      "counts": "files"
+    },
+    "source files": {
+      "ceiling": 30,
+      "counts": "files"
+    },
+    "source lines": {
+      "ceiling": 4000,
+      "counts": "lines"
     }
   },
   "surface": {

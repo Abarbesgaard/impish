@@ -112,7 +112,7 @@ cargo impish mutate add  # every obligation's tests catch a bug in the code
 
 | Command | What it does |
 | --- | --- |
-| `cargo impish check` | Holds the Contract to its tests. Reports every problem on stderr and exits 1, or says how many obligations held and exits 0. Reads only. |
+| `cargo impish check` | Holds the Contract to its tests. Reports every problem on stderr and exits 1, or says how many obligations held and exits 0. Reads only. Also holds the ceilings in `contract/scope.toml`, and prints how close each count is. See [contract/README.md](https://github.com/Abarbesgaard/impish/blob/main/contract/README.md#scope-ceilings). |
 | `cargo impish check --write` | Also writes `contract/coverage.json`, the published coverage. Once it exists, `check` fails when it's out of date. |
 | `cargo impish mutate <primitive>` | Breaks the code the primitive's covers block names with [cargo-mutants](https://mutants.rs), on a copy of the project, and credits each kill to the obligations whose tests caught it. Fails on an obligation whose tests catch nothing. Needs `cargo install cargo-mutants`. |
 | `cargo impish mutate` | With no primitive, mutates every primitive that covers code, and fails if any one's Contract isn't met. |
