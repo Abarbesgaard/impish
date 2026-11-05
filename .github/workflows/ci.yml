@@ -7,11 +7,11 @@ name: CI
 #
 #   Format and Clippy ──┐
 #   Dependency policy ──┤
-#   Workflow security ──┤
-#   Similar code (PRs) ─┼─ Mutants (PRs) ─┬─ CI ── Release (main, new version)
-#   Version (PRs) ──────┤                 │
-#   Test ───────────────┴─────────────────┤
-#   Portability ──────────────────────────┘
+#   Workflow security ──┤   Mutants (PRs) ──────────┐
+#   Similar code (PRs) ─┼─┬─────────────────────────┼─ CI ── Release (main, new version)
+#   Version (PRs) ──────┤ └ Contract mutants (PRs) ─┤
+#   Test ───────────────┴───────────────────────────┤
+#   Portability ────────────────────────────────────┘
 #
 # Format and Clippy: fmt, clippy, and the pipeline's own scripts (tests/pipeline).
 # Dependency policy: cargo-deny; licences, sources, advisories (deny.toml).
@@ -22,6 +22,8 @@ name: CI
 # Portability:       the suite on macOS and Windows; on macOS, the pipeline's
 #                    scripts under its bash 3.2 too.
 # Mutants:           every line the PR changes is mutated; a survivor fails.
+# Contract mutants:  impish's own `mutate --since`, built from the PR, on each
+#                    primitive the PR touches (rule 20).
 # Release:           publishes the crates and a GitHub release for a new version.
 on:
   push:
@@ -211,6 +213,44 @@ jobs:
           name: mutants.out
           path: mutants.out
 
+  # Hold impish to its own Contract (rule 20): the PR's build runs
+  # `cargo impish mutate --since` on impish, so every primitive whose Contract,
+  # contract tests or covered lines the PR changes must still be met.
+  contract-mutants:
+    name: Contract mutants
+    # The cheap checks first: a format slip shouldn't cost a mutation run.
+    needs: [lint, deny, zizmor, test, similar, version]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    # A change to mutate's Contract mutates all of it, and each of its mutants
+    # runs cargo-mutants in turn.
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: mutants
+          # Never runs on main: Test saves this key there.
+          save-if: false
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: cargo-mutants
+      - name: Mutate the primitives the PR touches
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: cargo run -q -- impish mutate --since "origin/${BASE_REF}" 2>&1 | tee mutate.txt
+      - name: Kill matrix
+        if: always()
+        run: |
+          [ -f mutate.txt ] || exit 0
+          { echo '```'; cat mutate.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
   # The exhale of rule 12: a function this PR adds or edits that looks like
   # another one fails, unless the pair is on the base already or declared in
   # scripts/similar-code.allow.
@@ -286,7 +326,7 @@ jobs:
   # let a failure through; this one fails if anything failed or was cancelled.
   ci:
     name: CI
-    needs: [lint, test, portability, deny, zizmor, mutants, similar, version]
+    needs: [lint, test, portability, deny, zizmor, mutants, contract-mutants, similar, version]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
