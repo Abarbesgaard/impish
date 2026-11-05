@@ -88,6 +88,14 @@ contract test that catches nothing is blind and fails, and so does any mutant
 no contract test catches, unless `mutants.md` declares it.
 See `contract/mutate/`.
 
+## Intent
+
+`contract/intent.md` says what the project is for, and
+`contract/<primitive>/intent.md` what one primitive is for. Both are optional;
+when present each needs a `## Purpose` and a `## Public surface` section, or
+`check` fails. `cargo impish regen <primitive>` puts them in the pack an agent
+rebuilds the primitive from.
+
 ## Decision records
 
 Why the project is built the way it is lives in `contract/decisions.toml`;

@@ -3,8 +3,9 @@ mod conditions;
 mod contract;
 mod decisions;
 mod mutate;
+mod regen;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -57,6 +58,17 @@ enum Command {
     /// Re-check the conditions of every decision record under contract/, and
     /// fail when one no longer holds.
     Conditions,
+    /// Write a pack to rebuild a primitive from its Contract alone: the
+    /// intents, obligations, decision records, contract tests and stubs of
+    /// the covered functions, without their code.
+    Regen {
+        /// The primitive, a directory under contract/.
+        primitive: String,
+        /// Where to write the pack; target/impish/regen/<primitive> when left
+        /// out. Only a previous pack there is replaced.
+        #[arg(long, value_name = "DIR")]
+        out: Option<PathBuf>,
+    },
 }
 
 /// How a run reports: text for people, or one JSON document on stdout.
@@ -92,6 +104,9 @@ fn run() -> anyhow::Result<ExitCode> {
     match Cli::parse_from(args).command {
         Command::Check { write, format } => check::run(root(&cwd)?, write, format == Format::Json),
         Command::Conditions => conditions::run(root(&cwd)?),
+        Command::Regen { primitive, out } => {
+            regen::run(root(&cwd)?, &primitive, out.map(|o| cwd.join(o)).as_deref())
+        }
         Command::Mutate {
             primitive,
             since,

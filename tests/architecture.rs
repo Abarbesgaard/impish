@@ -8,6 +8,7 @@
 //!   impish/src   #[impish::contract]: the attribute, on top of core
 //!   src          cargo-impish: main → {check, mutate} → contract, on top of core;
 //!                main → conditions → decisions, and check → decisions;
+//!                main → regen → contract;
 //!                mutate's scratch copy lives in src/mutate/
 
 use archunit::{
@@ -59,6 +60,8 @@ fn binary_layers_depend_inwards() {
         .defined_by("src/decisions**")
         .layer("mutate")
         .defined_by("src/mutate**")
+        .layer("regen")
+        .defined_by("src/regen**")
         .layer("contract")
         .defined_by("src/contract.rs")
         .where_layer("contract")
@@ -70,6 +73,8 @@ fn binary_layers_depend_inwards() {
         .where_layer("check")
         .may_only_depend_on_layers(&["contract", "decisions"])
         .where_layer("mutate")
+        .may_only_depend_on_layers(&["contract"])
+        .where_layer("regen")
         .may_only_depend_on_layers(&["contract"]);
 
     assert_passes!(rule);
@@ -184,7 +189,8 @@ fn only_commands_serialise_and_report() {
             pattern("src/**")
                 .except_in_path("src/check.rs")
                 .except_in_path("src/conditions.rs")
-                .except_in_path("src/mutate.rs"),
+                .except_in_path("src/mutate.rs")
+                .except_in_path("src/regen.rs"),
         )
         .should()
         .adhere_to(
@@ -197,8 +203,8 @@ fn only_commands_serialise_and_report() {
                     })
                     .all(|l| f.path.ends_with("src/main.rs") && l == UNDECIDED)
             },
-            "not print (the commands, src/check.rs, src/conditions.rs and \
-             src/mutate.rs, report; \
+            "not print (the commands, src/check.rs, src/conditions.rs, \
+             src/mutate.rs and src/regen.rs, report; \
              main prints only the error that stopped a run)",
         );
 

@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 
 mod stray;
 
-use crate::contract::{covers, escapes, fingerprint, surface, tagged_tests};
+use crate::contract::{covers, escapes, fingerprint, intent, surface, tagged_tests};
 use crate::decisions;
 use impish_core::obligations;
 
@@ -318,6 +318,16 @@ fn check(root: &Path) -> anyhow::Result<Report> {
     }
     report.problems.extend(stray::tags(root, &names));
     report.problems.extend(stray::tests(root, &names));
+    let intents = std::iter::once("contract/intent.md".to_string()).chain(
+        names
+            .iter()
+            .map(|name| format!("contract/{name}/intent.md")),
+    );
+    for file in intents {
+        if let Ok(text) = fs::read_to_string(root.join(&file)) {
+            report.problems.extend(intent(&file, &text));
+        }
+    }
     let (records, problems) = decisions::read(root);
     report.problems.extend(problems);
     report

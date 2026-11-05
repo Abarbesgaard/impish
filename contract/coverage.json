@@ -1,11 +1,11 @@
 {
   "kinds": {
-    "functional": 47,
+    "functional": 49,
     "non-functional": 2,
-    "persisted-format": 5,
-    "security": 3
+    "persisted-format": 6,
+    "security": 5
   },
-  "obligations": 57,
+  "obligations": 62,
   "primitives": {
     "attribute": {
       "obligations": 6,
@@ -34,12 +34,18 @@
       "surface": [
         "cli mutate"
       ]
+    },
+    "regen": {
+      "obligations": 5,
+      "surface": [
+        "cli regen"
+      ]
     }
   },
   "surface": {
-    "covered": 4,
+    "covered": 5,
     "percent": 100.0,
-    "total": 4
+    "total": 5
   },
   "uncovered": []
 }
