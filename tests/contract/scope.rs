@@ -72,11 +72,12 @@ fn malformed_ceilings_fail_naming_the_file_and_line() {
 #[impish::contract("scope/A2")]
 fn a_count_over_its_ceiling_fails_by_name() {
     let p = project(&format!(
-        "{}{}{}{}",
+        "{}{}{}{}{}",
         ceiling("docs", "files", "contract/**/*.md", 1),
         ceiling("code", "lines", "src/*.rs", 4),
         ceiling("fns", "functions", "src/**", 3),
-        ceiling("held", "files", "src/*.rs", 2),
+        ceiling("held", "files", "src/*.rs", 3),
+        ceiling("hidden", "files", "**/x.rs", 1),
     ));
     let code = "pub fn a() {\n\n    fn inner() {}\n}\n\nstruct S;\n\
                 impl S {\n    fn m(&self) {}\n}\ntrait T {\n    fn t();\n}\n";
@@ -85,7 +86,8 @@ fn a_count_over_its_ceiling_fails_by_name() {
         .write("src/notes.txt", "fn not_rust() {}\n")
         .write("src/broken.rs", "fn {\n")
         .write("target/x.rs", "fn hidden() {}\n")
-        .write(".git/x.rs", "fn hidden() {}\n");
+        .write(".git/x.rs", "fn hidden() {}\n")
+        .write("src/x.rs", "");
     let out = p.check();
     assert_eq!(out.code, Some(1), "{}", out.stderr);
     for problem in [
@@ -95,7 +97,9 @@ fn a_count_over_its_ceiling_fails_by_name() {
     ] {
         assert!(out.reports(problem), "{problem}\n{}", out.stderr);
     }
-    assert!(!out.stderr.contains("`held`"), "{}", out.stderr);
+    for held in ["`held`", "`hidden`"] {
+        assert!(!out.stderr.contains(held), "{}", out.stderr);
+    }
 }
 
 #[impish::contract("scope/A3")]

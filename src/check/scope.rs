@@ -188,8 +188,8 @@ fn files(root: &Path) -> Vec<String> {
                         walk(&entry.path(), &format!("{rel}/"), out);
                     }
                 }
-                Ok(t) if t.is_file() => out.push(rel),
-                _ => {}
+                Ok(_) => out.push(rel),
+                Err(_) => {}
             }
         }
     }
