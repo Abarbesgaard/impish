@@ -9,17 +9,21 @@ const KINDS: [&str; 5] = [
     "ordering",
     "security",
 ];
-const FIELDS: [&str; 4] = ["must", "why", "kind", "status"];
+const FIELDS: [&str; 5] = ["must", "why", "kind", "status", "record"];
 
 pub struct Obligation {
     pub kind: String,
     pub retired: bool,
+    /// The decision records its `record:` field names, and that field's line.
+    pub records: Vec<String>,
+    pub record_line: usize,
 }
 
 struct Block<'a> {
     id: u32,
     line: usize,
     fields: BTreeMap<&'a str, &'a str>,
+    record_line: usize,
 }
 
 /// The obligations a primitive's README declares under `## Obligations`.
@@ -63,6 +67,7 @@ pub fn obligations(readme: &str, file: &str) -> Result<BTreeMap<u32, Obligation>
                         id,
                         line: n,
                         fields: BTreeMap::new(),
+                        record_line: 0,
                     })
                 }
                 None => problems.push((n, format!("malformed obligation heading `{line}`"))),
@@ -74,6 +79,9 @@ pub fn obligations(readme: &str, file: &str) -> Result<BTreeMap<u32, Obligation>
                 problems.push((n, format!("unknown field `{name}`")))
             }
             (Some((name, value)), Some(block)) => {
+                if name == "record" {
+                    block.record_line = n;
+                }
                 if block.fields.insert(name, value).is_some() {
                     problems.push((n, format!("`{name}` is given twice")));
                 }
@@ -114,7 +122,13 @@ fn finish(
     found: &mut BTreeMap<u32, Obligation>,
     problems: &mut Vec<(usize, String)>,
 ) {
-    let Some(Block { id, line, fields }) = block else {
+    let Some(Block {
+        id,
+        line,
+        fields,
+        record_line,
+    }) = block
+    else {
         return;
     };
     for name in ["must", "kind", "status"] {
@@ -140,7 +154,23 @@ fn finish(
         }
     };
     let kind = fields.get("kind").unwrap_or(&"").to_string();
-    if found.insert(id, Obligation { kind, retired }).is_some() {
+    let records = fields
+        .get("record")
+        .map(|ids| {
+            ids.split(',')
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+    let obligation = Obligation {
+        kind,
+        retired,
+        records,
+        record_line,
+    };
+    if found.insert(id, obligation).is_some() {
         problems.push((line, format!("A{id} is declared twice")));
     }
 }

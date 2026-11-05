@@ -12,7 +12,7 @@ Every mutant must be caught. One that no contract test catches, whether it
 survives or times out, fails the run unless `contract/<primitive>/mutants.md`
 declares it: `equivalent` when no program could tell it from the original,
 `unpromised` when its behaviour changes and the Contract leaves that open
-([0011](../../docs/decisions/0011-mutate-is-strict.md)). Every contract test
+([D11](../decisions.toml)). Every contract test
 must catch at least one mutant too.
 
 ## Obligations

@@ -86,3 +86,44 @@ It is strict: an obligation whose tests catch nothing is hollow and fails, a
 contract test that catches nothing is blind and fails, and so does any mutant
 no contract test catches, unless `mutants.md` declares it.
 See `contract/mutate/`.
+
+## Decision records
+
+Why the project is built the way it is lives in `contract/decisions.toml`;
+the decisions of one primitive in `contract/<primitive>/decisions.toml`. One
+`[[record]]` each:
+
+```toml
+[[record]]
+id = "D3"                      # required, never reused
+date = 2026-11-03              # required
+decision = "check never builds or runs the crate"   # required
+driver = "a gate that runs code is slow and unsafe" # required
+approved_by = "Abarbesgaard"   # required
+alternatives = ["run the tests: duplicates cargo test"]
+consequences = ["check can't tell whether a test passes"]
+depends_on = ["D2"]
+superseded_by = "D12"
+expires = 2027-01-01
+
+[[record.conditions]]
+text = "syn parses the test files"
+dep = "syn"
+version = "^3"
+```
+
+Everything after `approved_by` is optional. A condition is a premise that, if
+it stops holding, makes the decision suspect. It has a `text` and at most one
+check: `dep` (a crate in `Cargo.lock`, with an optional semver `version`),
+`env` (a variable is set), `file` (a path under the project root exists) or
+`rustc` (the active rustc matches a semver requirement). A condition with only
+`text` is prose.
+
+An obligation points at the records behind it with a `- **record:** D3` field;
+several ids are comma-separated. `check` fails on a missing required field, a
+repeated id, an unknown field, or a `record:`, `depends_on` or
+`superseded_by` that names no record.
+
+`cargo impish conditions` re-checks every condition and prints ok or suspect
+per record. Prose conditions count as not machine-checkable. It exits 1 when
+any record is suspect.

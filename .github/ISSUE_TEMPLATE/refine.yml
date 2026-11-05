@@ -71,7 +71,7 @@ body:
     attributes:
       label: Behaviour this changes
       description: |
-        Changing something impish already does? Name the obligations it touches (e.g. `check/A5`) and say what impish does today. [Rule 20](https://impatientprogramming.org/rules/#rule-20): pin the existing behaviour with an obligation before changing it, and find out why each fence is there before you move it; [docs/decisions](https://github.com/Abarbesgaard/impish/tree/main/docs/decisions) records why. An obligation whose promise changes is retired and replaced, not edited.
+        Changing something impish already does? Name the obligations it touches (e.g. `check/A5`) and say what impish does today. [Rule 20](https://impatientprogramming.org/rules/#rule-20): pin the existing behaviour with an obligation before changing it, and find out why each fence is there before you move it; [contract/decisions.toml](https://github.com/Abarbesgaard/impish/blob/main/contract/decisions.toml) records why. An obligation whose promise changes is retired and replaced, not edited.
   - type: textarea
     id: unknowns
     attributes:

@@ -1,7 +1,7 @@
 # Architecture
 
 impish is a Cargo workspace of three crates. This page, the decision records in
-[docs/decisions](docs/decisions/) and the [Contract](contract/) are enough to
+[contract/decisions.toml](contract/decisions.toml) and the [Contract](contract/) are enough to
 regenerate it (Impatient Programming, rule 17): the Contract says what impish
 promises, the records say why it is built this way, and this page says where
 each part lives.
@@ -16,7 +16,7 @@ src/       cargo-impish  the `cargo impish` binary: check and mutate
 
 Dependencies point inwards: `cargo-impish` and `impish` both depend on
 `impish-core`, never on each other, and `impish-core` depends on nothing but
-`std`. ([0004](docs/decisions/0004-impish-core-is-the-shared-format.md))
+`std`. ([D4](contract/decisions.toml))
 
 ## cargo-impish
 
@@ -46,7 +46,7 @@ one thing: the error that stopped a run, which exits 2 (undecided), not 1
 
 `check` is static: it reads READMEs and parses test files, and never builds or
 runs a test. `cargo test` runs them, and the attribute ties the two together.
-([0003](docs/decisions/0003-check-is-static.md))
+([D3](contract/decisions.toml))
 
 ## impish (the attribute)
 
@@ -55,7 +55,7 @@ It makes the function a test, or goes beside a test attribute already there
 such as `#[test]` or `#[tokio::test]`, and checks each tag against
 `contract/<primitive>/README.md` while the test compiles, so a wrong tag is a
 compile error on that tag. It reports through `compile_error!`, never by
-printing or panicking. ([0002](docs/decisions/0002-tags-are-an-attribute-checked-at-compile-time.md), [0010](docs/decisions/0010-the-attribute-goes-beside-the-test-attribute.md))
+printing or panicking. ([D2](contract/decisions.toml), [D10](contract/decisions.toml))
 
 ## The Contract
 
@@ -69,8 +69,8 @@ contract/coverage.json           published coverage, rewritten by `check --write
 tests/contract/<primitive>.rs    the tests that prove the obligations
 ```
 
-([0001](docs/decisions/0001-the-contract-is-markdown-blocks.md),
-[0005](docs/decisions/0005-coverage-is-a-committed-file.md))
+([D1](contract/decisions.toml),
+[D5](contract/decisions.toml))
 
 ## Guardrails
 
@@ -83,7 +83,7 @@ merges itself (rule 27).
 | Format, Clippy | CI `lint` |
 | Tests, then `cargo impish check` on impish itself | CI `test` |
 | The suite on macOS and Windows | CI `portability` |
-| Architecture: the dependency directions and boundaries above, file size | `tests/architecture.rs` ([0008](docs/decisions/0008-architecture-rules-are-tests-not-obligations.md)) |
+| Architecture: the dependency directions and boundaries above, file size | `tests/architecture.rs` ([D8](contract/decisions.toml)) |
 | Dependency licences, sources and advisories | CI `deny`, `deny.toml`; nightly `audit.yml` |
 | Workflow security | CI `zizmor` |
 | No unused dependency | CI `lint`, `cargo machete` |
@@ -91,10 +91,10 @@ merges itself (rule 27).
 | Impish's own `mutate --since` holds each primitive a PR touches (rule 20) | CI `contract-mutants` |
 | No new near-duplicate functions | CI `similar`, `scripts/similar-code.sh` |
 | Existing near-duplicates become issues, one per cluster | nightly `similar-backlog.yml`, `scripts/similar-backlog.sh` |
-| A change to what ships (`scripts/shipped.sh`) bumps the version | CI `version` ([0006](docs/decisions/0006-every-green-merge-is-a-release.md)) |
+| A change to what ships (`scripts/shipped.sh`) bumps the version | CI `version` ([D6](contract/decisions.toml)) |
 | PR titles are `fix:` (with `bug`) or `refine:` (rule 9) | `pr-title.yml` |
-| Issues start from obligations: Refinement and Bug forms, no blank issues (rules 1, 20, 28) | `.github/ISSUE_TEMPLATE/` ([0009](docs/decisions/0009-every-issue-starts-from-a-contract.md)) |
+| Issues start from obligations: Refinement and Bug forms, no blank issues (rules 1, 20, 28) | `.github/ISSUE_TEMPLATE/` ([D9](contract/decisions.toml)) |
 | The gates' scripts work: each case fakes the slow tools and checks output and exit code; shellcheck; bash 3.2 | CI `lint`, `tests/pipeline/run.sh` |
-| Tests that catch nothing another test doesn't | nightly `kill-matrix.yml`, `scripts/kill-matrix.sh` ([0007](docs/decisions/0007-tests-earn-their-place-at-three-grains.md)) |
+| Tests that catch nothing another test doesn't | nightly `kill-matrix.yml`, `scripts/kill-matrix.sh` ([D7](contract/decisions.toml)) |
 
 On `main`, the `Release` job publishes every new version.

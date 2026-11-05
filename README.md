@@ -167,7 +167,7 @@ notice a bug. It breaks the covered code one change at a time (a mutant), runs
 the primitive's contract tests, and credits each failure to the obligations
 the failing tests name. It is strict: every mutant must be caught, or declared
 in `contract/<primitive>/mutants.md` with a reason
-([0011](https://github.com/Abarbesgaard/impish/blob/main/docs/decisions/0011-mutate-is-strict.md)):
+([D11](https://github.com/Abarbesgaard/impish/blob/main/contract/decisions.toml)):
 
 ```text
 $ cargo impish mutate calc
@@ -360,7 +360,7 @@ impish's own [CI](https://github.com/Abarbesgaard/impish/blob/main/.github/workf
 ## Contributing
 
 [ARCHITECTURE.md](https://github.com/Abarbesgaard/impish/blob/main/ARCHITECTURE.md) says where each part lives and which
-guardrails fire on a change; [docs/decisions](https://github.com/Abarbesgaard/impish/tree/main/docs/decisions/) says why.
+guardrails fire on a change; [contract/decisions.toml](https://github.com/Abarbesgaard/impish/blob/main/contract/decisions.toml) says why.
 
 ## License
 

@@ -1,0 +1,321 @@
+# impish's decision records: why impish is built the way it is. One record per
+# decision; ids are never reused, and a changed decision gets a new record that
+# supersedes the old one. `cargo impish check` reads this file;
+# `cargo impish conditions` re-checks each record's conditions.
+
+[[record]]
+id = "D1"
+date = 2026-11-03
+decision = """
+A Contract lives in contract/<primitive>/README.md as blocks under `## Obligations`: `### A<n> — <title>` \
+with the fields must, why, kind and status. Numbers are never reused, and the parser is total: \
+every line under the section must belong to a block, and an obligation outside it fails."""
+driver = """
+The Contract is read by people first, so it must be prose a reviewer can read in a PR. One-line \
+obligations were tried first, and a typo like `* **A3**` was skipped silently, so a promise could \
+fall out of the Contract without an error."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "One-line obligations: a malformed line was skipped silently, losing a promise.",
+]
+consequences = [
+  "The format is strict: a README that reads fine to a person can fail check.",
+  "Every failure names the file and line.",
+]
+
+[[record.conditions]]
+text = "The Contract lives in contract/ beside flinch's and covenant's sibling layout."
+file = "contract/README.md"
+
+[[record]]
+id = "D2"
+date = 2026-11-03
+decision = """
+A contract test is a function marked #[impish::contract("<primitive>/A<n>", …)], which checks each \
+tag against the primitive's README as the test compiles. check finds tests by parsing test files with \
+syn, and tags must name a plain primitive (letters, digits, -, _)."""
+driver = """
+`// Contract:` comment tags were only checked when check ran, so a typo or a retired obligation went \
+unnoticed while the test was written, and line scanning needed workarounds such as for test-looking \
+text inside strings."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "`// Contract:` comments: checked only by check, not while the test is written.",
+  "Scanning test files line by line: fooled by test-looking text in strings.",
+]
+consequences = [
+  "Users add impish as a dev-dependency, and the attribute reads files at compile time.",
+  "A plain #[test] in tests/contract/ names no obligation and fails check.",
+]
+depends_on = ["D1", "D4"]
+
+[[record.conditions]]
+text = "syn 3 parses test files and the attribute's input."
+dep = "syn"
+version = "^3"
+
+[[record.conditions]]
+text = "The attribute is a proc macro crate in the workspace."
+file = "impish/Cargo.toml"
+
+[[record]]
+id = "D3"
+date = 2026-11-03
+decision = """
+cargo impish check reads READMEs and parses test files. It never builds or runs the crate or its tests, \
+changes no file unless --write is given, and runs no process but the surface command configured in impish.toml."""
+driver = """
+cargo test already runs the tests and the attribute makes tags compile-time facts, so check only compares \
+the Contract with the tagged tests. That keeps it fast enough for every change and safe anywhere: a gate \
+that edits what it checks can hide what it found."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "Building and running tests in check: duplicates cargo test and makes the gate slow.",
+]
+consequences = [
+  "check can't tell whether a test passes (cargo test covers that) or has teeth (cargo impish mutate covers that).",
+]
+depends_on = ["D2"]
+
+[[record.conditions]]
+text = "cargo test runs every contract test, so check need not."
+
+[[record]]
+id = "D4"
+date = 2026-11-03
+decision = """
+The README parser lives in impish-core, used by both the binary and the attribute. It depends on nothing \
+but std and does no I/O; callers read the file and pass its text in."""
+driver = """
+The attribute and check must agree on what a README declares, or a tag could compile and then fail check, \
+or the other way round. One parser makes disagreement impossible; keeping it pure keeps it cheap for a proc \
+macro to depend on and easy to test."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "A parser in each of the binary and the attribute: the two could disagree.",
+]
+consequences = [
+  "A third crate in the workspace.",
+  "tests/architecture.rs keeps impish-core pure.",
+]
+
+[[record.conditions]]
+text = "impish-core is a separate workspace crate."
+file = "core/Cargo.toml"
+
+[[record.conditions]]
+text = "An architecture test keeps impish-core free of dependencies and I/O."
+file = "tests/architecture.rs"
+
+[[record]]
+id = "D5"
+date = 2026-11-03
+decision = """
+cargo impish check --write writes contract/coverage.json: active obligations in total, per kind and per \
+primitive, and, with a surface command, how much of the surface the Contract covers. The file is committed, \
+check fails once it is stale, and CI publishes it in the run summary."""
+driver = """
+Impatient Programming rule 29: the Contract is met or not, and its coverage is published. A committed file \
+makes a change in coverage show up in the PR that caused it."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "Computing coverage only in CI: a change in coverage wouldn't show in the PR's diff.",
+]
+consequences = [
+  "A PR that changes the Contract also runs check --write.",
+]
+depends_on = ["D1"]
+
+[[record.conditions]]
+text = "The coverage file is committed."
+file = "contract/coverage.json"
+
+[[record.conditions]]
+text = "CI publishes coverage in the job summary."
+file = ".github/workflows/ci.yml"
+
+[[record]]
+id = "D6"
+date = 2026-11-03
+decision = """
+A PR that changes what ships must bump the workspace version; CI's version job fails otherwise. What ships \
+is what cargo package puts in the crates, as listed by scripts/shipped.sh. On main, the Release job tags and \
+publishes any version without a GitHub release. Dependabot is exempt and ships with the next release."""
+driver = """
+Impatient Programming rule 3: users install by tag, so every merged change must be installable and a release \
+can never be a forgotten separate step. A hand-kept list of shipped paths drifted: the README ships on \
+crates.io but wasn't on it, so #20 merged green and never reached crates.io."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "Releasing as a separate manual step: someone can forget it.",
+  "A hand-kept list of shipped paths: it drifted and let #20 merge without a release.",
+]
+consequences = [
+  "Version numbers move fast.",
+  "The bump is part of every PR that ships.",
+  "cargo-impish lists its files in include, so tests, docs and workflows don't ship.",
+]
+
+[[record.conditions]]
+text = "The shipped files are listed by asking cargo what it packs."
+file = "scripts/shipped.sh"
+
+[[record.conditions]]
+text = "CI has the version and Release jobs."
+file = ".github/workflows/ci.yml"
+
+[[record.conditions]]
+text = "Users install impish by tag."
+
+[[record]]
+id = "D7"
+date = 2026-11-03
+decision = """
+Mutation testing runs at three grains: CI mutates every line a PR changes and fails on a mutant no test \
+catches; cargo impish mutate <primitive> credits kills to obligations and fails on one that catches nothing; \
+the nightly kill matrix runs every mutant against the whole suite and files an issue for each test whose \
+kills other tests already make. Closing the issue keeps the test."""
+driver = """
+Impatient Programming rule 26: a test is kept only if it catches something no other test catches. A green \
+obligation can be hollow, and agents write redundant tests cheaply; each grain catches what the others can't."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "A single grain: each of per-line, per-obligation and per-test misses what the others catch.",
+]
+consequences = [
+  "The full per-test sweep takes hours, so it runs one shard a night and only suggests.",
+  "Contract tests are spec and may be kept on purpose.",
+]
+superseded_by = "D11"
+
+[[record.conditions]]
+text = "The kill matrix script exists."
+file = "scripts/kill-matrix.sh"
+
+[[record.conditions]]
+text = "The kill matrix runs nightly."
+file = ".github/workflows/kill-matrix.yml"
+
+[[record.conditions]]
+text = "cargo-mutants can mutate the workspace."
+
+[[record]]
+id = "D8"
+date = 2026-11-03
+decision = """
+The dependency directions and boundaries in ARCHITECTURE.md are enforced by tests/architecture.rs with \
+archunit, as plain #[test]s, outside the Contract."""
+driver = """
+The Contract is what impish promises its users; how its code is arranged isn't one of those promises and \
+could change without any user noticing. The rules still fire on every change (rule 24)."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "Architecture rules as obligations: mixes structure with promises and inflates coverage.",
+]
+consequences = [
+  "A rule change is a code change to the test file, not a Contract change.",
+  "The kill matrix leaves these tests out, since they catch structure, not behaviour.",
+]
+depends_on = ["D7"]
+
+[[record.conditions]]
+text = "archunit checks the architecture rules."
+dep = "archunit"
+
+[[record.conditions]]
+text = "The architecture tests live outside tests/contract/."
+file = "tests/architecture.rs"
+
+[[record]]
+id = "D9"
+date = 2026-11-04
+decision = """
+Issues are opened through the forms in .github/ISSUE_TEMPLATE/, with blank issues off. A Refinement \
+(refine:, label refine) states the intent, the primitive and its obligations in the Contract's block \
+format; a Bug (fix:, label bug) names the released version and the obligation the Contract was missing."""
+driver = """
+Rule 1: write down how you'll know work worked before committing to it. Rule 20: those criteria are the \
+Contract's obligations, so issues use its format. Rule 28: a bug means the Contract missed something. \
+Rule 9: fix is only for a defect in released code; titles and labels match what pr-title.yml asks of the PR."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "Free-form issues: work starts without stated criteria.",
+  "GitHub issue types: personal repositories can't set them, so labels carry the type.",
+]
+consequences = [
+  "The forms only bind the website: gh issue create, the API and agents can still open a free-form issue.",
+]
+depends_on = ["D1"]
+
+[[record.conditions]]
+text = "The Refinement form exists."
+file = ".github/ISSUE_TEMPLATE/refine.yml"
+
+[[record.conditions]]
+text = "The Bug form exists."
+file = ".github/ISSUE_TEMPLATE/bug.yml"
+
+[[record.conditions]]
+text = "PR titles are checked against the same types."
+file = ".github/workflows/pr-title.yml"
+
+[[record.conditions]]
+text = "The repository is personal, so it can't set GitHub's issue type."
+
+[[record]]
+id = "D10"
+date = 2026-11-04
+decision = """
+#[impish::contract(…)] adds #[test] only when the function has no test attribute of its own (#[test], or \
+one whose path ends in test, such as #[tokio::test]). A test attribute above it has already been expanded \
+by rustc, so the macro reads its own source file (Span::local_file) to find the same function."""
+driver = """
+Replacing #[test] rewrote every test a crate brought to impish, keeping it registered the test twice, and \
+with #[tokio::test] below the contract attribute the test didn't compile. As rule 13 asks, the change \
+started as obligation attribute/A6 and a test that failed against it."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "Replacing #[test]: rewrites every adopted test.",
+  "Always adding #[test]: registers the test twice and breaks #[tokio::test].",
+]
+consequences = [
+  "The impish crate needs Rust 1.88, and each contract attribute parses its file once more as the test compiles.",
+  "A function written twice identically in one file, with a test attribute on only one copy, loses the other copy's #[test].",
+  "A test attribute whose path doesn't end in test (#[rstest], #[test_case]) isn't recognised.",
+]
+depends_on = ["D2"]
+
+[[record.conditions]]
+text = "Span::local_file is stable, from Rust 1.88."
+rustc = ">=1.88"
+
+[[record.conditions]]
+text = "Test attributes in use end their path in test."
+
+[[record]]
+id = "D11"
+date = 2026-11-04
+decision = """
+cargo impish mutate <primitive> fails on any mutant of the covered code no contract test catches, surviving \
+or timing out, as well as on a hollow obligation or a blind contract test. The only way past a mutant is to \
+declare it in contract/<primitive>/mutants.md as equivalent or unpromised, by its cargo-mutants name without \
+line and column. Declared mutants still run; a contradicted or unmatched declaration fails. There is no switch \
+to turn strictness off."""
+driver = """
+Under D7, mutate passed once every obligation caught one mutant: sara's done/A1 passed with 12 survivors in \
+code its covers block claims. A survivor in covered code is code the Contract claims but doesn't specify \
+(rules 20 and 26). flinch, impish's Go sibling, already blocks on any break the Contract's tests sleep through."""
+approved_by = "Abarbesgaard"
+alternatives = [
+  "Per-obligation pass (D7): one kill per obligation let survivors through.",
+  "A switch to turn strictness off: lets a primitive opt out of being specified.",
+]
+consequences = [
+  "Every covered function's mutants must be killed or explained in writing, so covers blocks get narrower and contract tests sharper.",
+  "A timeout is no longer a pass, so a slow suite can fail a run; declaring the mutant is the way out.",
+  "A declaration covers every mutant with its name, so identical changes in one function are declared or caught together.",
+]
+depends_on = ["D7"]
+
+[[record.conditions]]
+text = "cargo-mutants names mutants stably enough to declare them without line and column."

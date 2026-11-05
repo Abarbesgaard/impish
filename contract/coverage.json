@@ -1,11 +1,11 @@
 {
   "kinds": {
-    "functional": 43,
+    "functional": 47,
     "non-functional": 2,
-    "persisted-format": 4,
-    "security": 2
+    "persisted-format": 5,
+    "security": 3
   },
-  "obligations": 51,
+  "obligations": 57,
   "primitives": {
     "attribute": {
       "obligations": 6,
@@ -23,6 +23,12 @@
       "obligations": 3,
       "surface": []
     },
+    "decisions": {
+      "obligations": 6,
+      "surface": [
+        "cli conditions"
+      ]
+    },
     "mutate": {
       "obligations": 17,
       "surface": [
@@ -31,9 +37,9 @@
     }
   },
   "surface": {
-    "covered": 3,
+    "covered": 4,
     "percent": 100.0,
-    "total": 3
+    "total": 4
   },
   "uncovered": []
 }

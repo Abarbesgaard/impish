@@ -1,5 +1,7 @@
 mod check;
+mod conditions;
 mod contract;
+mod decisions;
 mod mutate;
 
 use std::path::Path;
@@ -52,6 +54,9 @@ enum Command {
         #[arg(long, value_enum, default_value_t = Format::Text)]
         format: Format,
     },
+    /// Re-check the conditions of every decision record under contract/, and
+    /// fail when one no longer holds.
+    Conditions,
 }
 
 /// How a run reports: text for people, or one JSON document on stdout.
@@ -86,6 +91,7 @@ fn run() -> anyhow::Result<ExitCode> {
     let cwd = std::env::current_dir()?;
     match Cli::parse_from(args).command {
         Command::Check { write, format } => check::run(root(&cwd)?, write, format == Format::Json),
+        Command::Conditions => conditions::run(root(&cwd)?),
         Command::Mutate {
             primitive,
             since,

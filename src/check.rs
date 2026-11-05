@@ -2,16 +2,17 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, ExitCode};
 
 use anyhow::{Context, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::contract::{
-    contract_attributes, covers, escapes, fingerprint, surface, tagged_tests, test_attributes,
-};
+mod stray;
+
+use crate::contract::{covers, escapes, fingerprint, surface, tagged_tests};
+use crate::decisions;
 use impish_core::obligations;
 
 /// `impish.toml`, at the project root; every key is optional.
@@ -201,6 +202,7 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         kinds: BTreeMap::new(),
         covered: BTreeMap::new(),
     };
+    let mut cited = Vec::new();
     for name in &names {
         let Ok(readme) = fs::read_to_string(dir.join(name).join("README.md")) else {
             report
@@ -252,6 +254,10 @@ fn check(root: &Path) -> anyhow::Result<Report> {
                 continue;
             }
         };
+        cited.extend(ids.values().filter(|o| !o.records.is_empty()).map(|o| {
+            let at = format!("{readme_file}:{}", o.record_line);
+            (at, o.records.clone())
+        }));
         let active: Vec<_> = ids.values().filter(|o| !o.retired).collect();
         for o in &active {
             *report.kinds.entry(o.kind.clone()).or_default() += 1;
@@ -310,8 +316,13 @@ fn check(root: &Path) -> anyhow::Result<Report> {
             });
         }
     }
-    report.problems.extend(stray_tags(root, &names));
-    report.problems.extend(stray_tests(root, &names));
+    report.problems.extend(stray::tags(root, &names));
+    report.problems.extend(stray::tests(root, &names));
+    let (records, problems) = decisions::read(root);
+    report.problems.extend(problems);
+    report
+        .problems
+        .extend(decisions::dangling(&records, &cited));
     report.real = real;
     Ok(report)
 }
@@ -320,75 +331,4 @@ fn defines(root: &Path, file: &str, func: &str) -> bool {
     fs::read_to_string(root.join(file)).is_ok_and(|src| {
         src.contains(&format!("fn {func}(")) || src.contains(&format!("fn {func}<"))
     })
-}
-
-/// `file` relative to `root`, with `/` between its parts on every platform,
-/// as the Contract names files.
-fn relative(root: &Path, file: &Path) -> String {
-    let parts: Vec<_> = file
-        .strip_prefix(root)
-        .unwrap_or(file)
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy())
-        .collect();
-    parts.join("/")
-}
-
-/// Tags in `src/` and `tests/` outside the primitives' test files.
-fn stray_tags(root: &Path, names: &[String]) -> Vec<String> {
-    let mut files = Vec::new();
-    rust_files(&root.join("src"), &mut files);
-    rust_files(&root.join("tests"), &mut files);
-    files.sort();
-    let homes: Vec<PathBuf> = names
-        .iter()
-        .map(|name| root.join("tests/contract").join(format!("{name}.rs")))
-        .collect();
-    let mut problems = Vec::new();
-    for file in files.iter().filter(|file| !homes.contains(file)) {
-        let src = fs::read_to_string(file).unwrap_or_default();
-        let rel = relative(root, file);
-        for n in contract_attributes(&src) {
-            problems.push(format!(
-                "{rel}:{n}: an #[impish::contract] attribute outside tests/contract/<primitive>.rs"
-            ));
-        }
-    }
-    problems
-}
-
-/// Tests in `tests/contract/` outside the primitives' test files.
-fn stray_tests(root: &Path, names: &[String]) -> Vec<String> {
-    let dir = root.join("tests/contract");
-    let mut files = Vec::new();
-    rust_files(&dir, &mut files);
-    files.sort();
-    let mut problems = Vec::new();
-    for file in &files {
-        let home = names
-            .iter()
-            .any(|name| *file == dir.join(format!("{name}.rs")));
-        if home {
-            continue;
-        }
-        let src = fs::read_to_string(file).unwrap_or_default();
-        let rel = relative(root, file);
-        for n in test_attributes(&src) {
-            problems.push(format!(
-                "{rel}:{n}: a test outside tests/contract/<primitive>.rs"
-            ));
-        }
-    }
-    problems
-}
-
-fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            rust_files(&path, out);
-        } else if path.extension().is_some_and(|ext| ext == "rs") {
-            out.push(path);
-        }
-    }
 }
