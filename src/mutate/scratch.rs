@@ -41,10 +41,19 @@ fn mutated(src: &str, span: &Span, replacement: &str) -> anyhow::Result<String> 
 pub(super) struct Scratch {
     dir: PathBuf,
     target: PathBuf,
+    /// Whether the tests outside the Contract run too.
+    whole: bool,
+}
+
+/// The test executables a build makes: the contract target's, and with the
+/// whole suite every other target's, by target name.
+pub(super) struct Built {
+    pub(super) contract: PathBuf,
+    pub(super) outside: Vec<(String, PathBuf)>,
 }
 
 impl Scratch {
-    pub(super) fn copy(root: &Path) -> anyhow::Result<Self> {
+    pub(super) fn copy(root: &Path, whole: bool) -> anyhow::Result<Self> {
         let base = root.join("target/impish/mutate");
         let dir = base.join("project");
         if dir.exists() {
@@ -54,19 +63,19 @@ impl Scratch {
         let target = std::env::var_os("CARGO_TARGET_DIR")
             .map_or_else(|| root.join("target"), PathBuf::from)
             .join("impish-mutate");
-        Ok(Self { dir, target })
+        Ok(Self { dir, target, whole })
     }
 
-    /// The contract test executable, or `None` when it doesn't build.
-    pub(super) fn build(&self) -> anyhow::Result<Option<PathBuf>> {
-        let out = Command::new(cargo())
-            .args([
-                "test",
-                "--test",
-                "contract",
-                "--no-run",
-                "--message-format=json",
-            ])
+    /// The test executables, or `None` when they don't build.
+    pub(super) fn build(&self) -> anyhow::Result<Option<Built>> {
+        let mut cmd = Command::new(cargo());
+        cmd.args(["test", "--no-run", "--message-format=json"]);
+        if self.whole {
+            cmd.arg("--workspace");
+        } else {
+            cmd.args(["--test", "contract"]);
+        }
+        let out = cmd
             .current_dir(&self.dir)
             .env("CARGO_TARGET_DIR", &self.target)
             .stderr(Stdio::null())
@@ -75,28 +84,62 @@ impl Scratch {
         if !out.status.success() {
             return Ok(None);
         }
-        Ok(String::from_utf8_lossy(&out.stdout)
+        let mut contract = None;
+        let mut outside = Vec::new();
+        for msg in String::from_utf8_lossy(&out.stdout)
             .lines()
             .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-            .filter(|msg| msg["target"]["name"] == "contract")
-            .filter_map(|msg| msg["executable"].as_str().map(PathBuf::from))
-            .next_back())
+        {
+            let (Some(name), Some(exe)) = (
+                msg["target"]["name"].as_str(),
+                msg["executable"].as_str().map(PathBuf::from),
+            ) else {
+                continue;
+            };
+            if name == "contract" {
+                contract = Some(exe);
+            } else {
+                outside.push((name.to_string(), exe));
+            }
+        }
+        Ok(contract.map(|contract| Built { contract, outside }))
     }
 
-    /// The primitive's tests that fail, or `None` when they time out.
+    /// The tests outside the Contract that fail, as `<target>::<test>`, or
+    /// `None` when one of their targets times out.
+    pub(super) fn test_outside(
+        &self,
+        built: &Built,
+        timeout: Option<Duration>,
+    ) -> anyhow::Result<Option<BTreeSet<String>>> {
+        let mut failed = BTreeSet::new();
+        for (name, exe) in &built.outside {
+            let Some(tests) = self.test(exe, None, timeout)? else {
+                return Ok(None);
+            };
+            failed.extend(tests.into_iter().map(|t| format!("{name}::{t}")));
+        }
+        Ok(Some(failed))
+    }
+
+    /// The tests that fail, those under the `primitive` module when given,
+    /// or `None` when they time out.
     pub(super) fn test(
         &self,
         exe: &Path,
-        primitive: &str,
+        primitive: Option<&str>,
         timeout: Option<Duration>,
     ) -> anyhow::Result<Option<BTreeSet<String>>> {
-        let mut child = Command::new(exe)
-            .arg(format!("{primitive}::"))
+        let mut cmd = Command::new(exe);
+        if let Some(primitive) = primitive {
+            cmd.arg(format!("{primitive}::"));
+        }
+        let mut child = cmd
             .current_dir(&self.dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .context("run the contract tests")?;
+            .context("run the tests")?;
         let mut stdout = child.stdout.take().expect("piped stdout");
         let reader = thread::spawn(move || {
             let mut text = String::new();
@@ -113,7 +156,7 @@ impl Scratch {
         }
         let text = reader
             .join()
-            .map_err(|_| anyhow!("read the contract tests' output"))??;
+            .map_err(|_| anyhow!("read the tests' output"))??;
         Ok(Some(
             text.lines()
                 .filter_map(|l| l.strip_prefix("test ")?.strip_suffix(" ... FAILED"))
@@ -122,6 +165,8 @@ impl Scratch {
         ))
     }
 
+    /// The mutant's outcome against the contract tests, and with the whole
+    /// suite the outside tests that catch it.
     pub(super) fn try_mutant(
         &self,
         mutant: &Mutant,
@@ -129,7 +174,7 @@ impl Scratch {
         timeout: Duration,
         tags: &BTreeMap<String, Vec<String>>,
         active: &[String],
-    ) -> anyhow::Result<Outcome> {
+    ) -> anyhow::Result<(Outcome, BTreeSet<String>)> {
         let path = self.dir.join(&mutant.file);
         let original =
             fs::read_to_string(&path).with_context(|| format!("read {}", mutant.file))?;
@@ -137,9 +182,10 @@ impl Scratch {
             &path,
             mutated(&original, &mutant.span, &mutant.replacement)?,
         )?;
+        let mut outside = BTreeSet::new();
         let outcome = match self.build()? {
             None => Outcome::Unviable,
-            Some(exe) => match self.test(&exe, primitive, Some(timeout))? {
+            Some(built) => match self.test(&built.contract, Some(primitive), Some(timeout))? {
                 None => Outcome::TimedOut,
                 Some(failed) => {
                     let by: BTreeSet<String> = failed
@@ -148,6 +194,12 @@ impl Scratch {
                         .filter(|tag| active.contains(tag))
                         .cloned()
                         .collect();
+                    if self.whole {
+                        // A target that hangs names no test, so it proves nothing.
+                        outside = self
+                            .test_outside(&built, Some(timeout))?
+                            .unwrap_or_default();
+                    }
                     // Caught only by tests that name no active obligation,
                     // the Contract still lets the mutant through.
                     if by.is_empty() {
@@ -159,7 +211,7 @@ impl Scratch {
             },
         };
         fs::write(&path, original)?;
-        Ok(outcome)
+        Ok((outcome, outside))
     }
 }
 

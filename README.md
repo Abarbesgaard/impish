@@ -117,6 +117,7 @@ cargo impish mutate add  # every obligation's tests catch a bug in the code
 | `cargo impish mutate <primitive>` | Breaks the code the primitive's covers block names with [cargo-mutants](https://mutants.rs), on a copy of the project, and credits each kill to the obligations whose tests caught it. Fails on an obligation whose tests catch nothing. Needs `cargo install cargo-mutants`. |
 | `cargo impish mutate` | With no primitive, mutates every primitive that covers code, and fails if any one's Contract isn't met. |
 | `cargo impish mutate --since <ref>` | Mutates only the covered lines changed since the merge base with `<ref>`, uncommitted work included, and all of a primitive whose Contract or tests changed. A run that sees only some mutants doesn't call obligations hollow or tests blind. |
+| `cargo impish mutate --whole-suite` | Also runs every test outside the contract target against each mutant. Names an outside test that catches a mutant the Contract misses as a witness of a missing obligation. With no primitive and no `--since`, fails on each outside test whose every catch the contract tests make too: it duplicates the Contract. Doc tests aren't run. |
 | `cargo impish mutate <primitive> --write` | Also records in `contract/coverage.json` whether the primitive's mutate is met, with a fingerprint of its README, `mutants.md`, contract tests and covered files. `check` keeps the result and fails once any of those change. |
 | `--format json` | On `check` or `mutate`: prints one JSON document on stdout instead of the text, with `version`, `met`, every problem, and the counts (for `mutate`, every mutant's outcome and the tests that caught it). Exits the same way. |
 
@@ -145,6 +146,7 @@ The Contract is not met.
 | `contract/coverage.json is out of date` | Run `cargo impish check --write` and commit the result. |
 | `…: the mutate result for <primitive> is stale` | Its Contract, tests or covered code changed since `mutate --write`. Run `cargo impish mutate <primitive> --write` and commit the result. |
 | `…: covers <file>::<fn>, which doesn't exist` | The function was renamed or moved. Update the covers block. |
+| `<test>: every mutant it catches, the Contract catches too, so it duplicates the Contract` | From `mutate --whole-suite`. Delete the outside test, or make it catch something the Contract doesn't. |
 | `<file>:<line>: a test outside tests/contract/<primitive>.rs` | A test in `main.rs`, a helper, or a file with no `contract/<name>/README.md`. Give it a Contract, or move it out of `tests/contract/`. |
 
 A tag that names no obligation stops at `cargo test`, before `check` runs:
@@ -190,8 +192,8 @@ The Contract is not met.
 
 - **killed:** mutants this obligation's tests caught.
 - **unique:** mutants *only* this obligation's tests caught, among the
-  Contract's tests. `mutate` runs only those, so a test outside the Contract
-  may catch a "unique" mutant too. An obligation with kills but no unique
+  Contract's tests. `mutate` runs only those unless given `--whole-suite`,
+  so a test outside the Contract may catch a "unique" mutant too. An obligation with kills but no unique
   kills is proved only by bugs other obligations already catch. That's fine for a non-functional promise, but worth a look
   for a functional one.
 - **hollow:** an obligation with no kills at all. Its tests pass whatever the

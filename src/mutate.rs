@@ -13,14 +13,18 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 mod judge;
+mod record;
 mod scratch;
 mod since;
+mod suite;
 
 use judge::{Verdict, judge};
+use record::record;
 use scratch::Scratch;
 use since::Changes;
+use suite::Outside;
 
-use crate::contract::{Declared, covers, declarations, fingerprint, tagged_tests};
+use crate::contract::{Declared, covers, declarations, tagged_tests};
 use impish_core::obligations;
 
 #[derive(Deserialize)]
@@ -64,11 +68,13 @@ enum Outcome {
 }
 
 /// Mutates the primitive, or every primitive that covers code; with a
-/// `since` ref, only the mutants on lines changed since its merge base.
+/// `since` ref, only the mutants on lines changed since its merge base; with
+/// the `whole` suite, the tests outside the Contract too.
 pub fn run(
     root: &Path,
     primitive: Option<&str>,
     since: Option<&str>,
+    whole: bool,
     write: bool,
     json: bool,
 ) -> anyhow::Result<ExitCode> {
@@ -79,19 +85,41 @@ pub fn run(
     let changes = since.map(|r| Changes::since(root, r)).transpose()?;
     let mut met = true;
     let mut docs = Map::new();
+    let mut outside = Outside::new();
     for name in &names {
         let every = primitive.is_none();
-        if let Some(ran) = mutate(root, name, every, changes.as_ref(), write, json)? {
+        let ran = mutate(root, name, every, changes.as_ref(), whole, write, json)?;
+        if let Some(ran) = ran {
             met &= ran.problems.is_empty();
             docs.insert(name.clone(), ran.json);
+            suite::merge(&mut outside, ran.outside);
         }
     }
+    // An outside test may guard another primitive's code, or lines a
+    // `--since` run skips, so only a run of everything finds a duplicate.
+    let duplicates = if whole && primitive.is_none() && since.is_none() {
+        suite::duplicates(&outside)
+    } else {
+        if whole && !json {
+            println!(
+                "Duplicates outside the Contract need a run of every primitive, with no --since.\n"
+            );
+        }
+        Vec::new()
+    };
+    met &= duplicates.is_empty();
     if json {
         match primitive {
             Some(name) => println!("{}", docs[name]),
-            None => println!("{}", json!({"version": 1, "met": met, "primitives": docs})),
+            None => println!(
+                "{}",
+                json!({"version": 1, "met": met, "primitives": docs, "duplicates": duplicates})
+            ),
         }
     } else if !met {
+        for test in &duplicates {
+            eprintln!("{}", suite::duplicate(test));
+        }
         eprintln!("The Contract is not met.");
     }
     Ok(if met {
@@ -118,6 +146,7 @@ fn primitives(root: &Path) -> anyhow::Result<Vec<String>> {
 struct Ran {
     problems: Vec<String>,
     json: Value,
+    outside: Outside,
 }
 
 /// Mutates one primitive and reports it; `None` when `every` primitive is
@@ -127,6 +156,7 @@ fn mutate(
     primitive: &str,
     every: bool,
     changes: Option<&Changes>,
+    whole: bool,
     write: bool,
     json: bool,
 ) -> anyhow::Result<Option<Ran>> {
@@ -176,7 +206,14 @@ fn mutate(
         if write {
             record(root, primitive, &readme, false)?;
         }
-        return Ok(Some(finish(primitive, &[], &declared, verdict, json)));
+        return Ok(Some(finish(
+            primitive,
+            &[],
+            &declared,
+            verdict,
+            whole,
+            json,
+        )));
     }
     let tests_file = format!("tests/contract/{primitive}.rs");
     let tests =
@@ -208,19 +245,23 @@ fn mutate(
                 &[],
                 &declared,
                 Verdict::default(),
+                whole,
                 json,
             )));
         }
     }
-    let scratch = Scratch::copy(root)?;
-    let exe = scratch
+    let scratch = Scratch::copy(root, whole)?;
+    let built = scratch
         .build()?
-        .ok_or_else(|| anyhow!("the contract tests don't build"))?;
+        .ok_or_else(|| anyhow!("the tests don't build"))?;
     let started = Instant::now();
-    let failed = match scratch.test(&exe, primitive, None)? {
+    let mut failed = match scratch.test(&built.contract, Some(primitive), None)? {
         Some(failed) => failed,
         None => bail!("the contract tests time out before any mutation"),
     };
+    if whole {
+        failed.extend(scratch.test_outside(&built, None)?.unwrap_or_default());
+    }
     if !failed.is_empty() {
         let failed: Vec<_> = failed.into_iter().collect();
         bail!(
@@ -239,8 +280,11 @@ fn mutate(
     }
 
     let mut outcomes = Vec::new();
+    let mut caught = Vec::new();
+    let mut outside = Outside::new();
     for mutant in &mutants {
-        let outcome = scratch.try_mutant(mutant, primitive, timeout, &tags, &active)?;
+        let (outcome, by_outside) =
+            scratch.try_mutant(mutant, primitive, timeout, &tags, &active)?;
         let mut verdict = match &outcome {
             Outcome::Killed { by, .. } => {
                 format!(
@@ -258,8 +302,11 @@ fn mutate(
             verdict = format!("{verdict}, declared {}", d.kind);
         }
         if !json {
-            println!("  {}  {verdict}", mutant.name);
+            let witnessed = suite::witnessed(&outcome, &by_outside);
+            println!("  {}  {verdict}{witnessed}", mutant.name);
         }
+        suite::tally(&mut outside, &outcome, &by_outside);
+        caught.push(by_outside);
         outcomes.push(outcome);
     }
     let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
@@ -268,25 +315,12 @@ fn mutate(
     if write {
         record(root, primitive, &readme, verdict.problems.is_empty())?;
     }
-    Ok(Some(finish(primitive, &tried, &declared, verdict, json)))
-}
-
-/// Records in contract/coverage.json whether the primitive's mutate is met,
-/// with the fingerprint `check` holds it to.
-fn record(root: &Path, primitive: &str, readme: &str, met: bool) -> anyhow::Result<()> {
-    let path = root.join("contract/coverage.json");
-    let mut doc: Value = if path.exists() {
-        let text = fs::read_to_string(&path).context("read contract/coverage.json")?;
-        serde_json::from_str(&text).context("read contract/coverage.json")?
-    } else {
-        json!({})
-    };
-    let fingerprint = fingerprint(primitive, readme, |file| {
-        fs::read_to_string(root.join(file)).unwrap_or_default()
-    });
-    doc["primitives"][primitive]["mutate"] = json!({"met": met, "fingerprint": fingerprint});
-    fs::write(&path, serde_json::to_string_pretty(&doc)? + "\n")
-        .context("write contract/coverage.json")
+    let mut ran = finish(primitive, &tried, &declared, verdict, whole, json);
+    if whole {
+        suite::annotate(&mut ran.json, &caught);
+    }
+    ran.outside = outside;
+    Ok(Some(ran))
 }
 
 /// The mutant's name without line and column, as mutants.md declares it.
@@ -304,6 +338,7 @@ fn finish(
     tried: &[(&Mutant, &Outcome)],
     declared: &[Declared],
     v: Verdict,
+    whole: bool,
     json: bool,
 ) -> Ran {
     let doc = judge::json(primitive, tried, declared, &v);
@@ -311,6 +346,7 @@ fn finish(
         return Ran {
             problems: v.problems,
             json: doc,
+            outside: Outside::new(),
         };
     }
     if !tried.is_empty() {
@@ -330,7 +366,9 @@ fn finish(
             println!("  {id:width$}  {killed:>6}  {unique:>6}");
         }
         println!("  unique: caught by no other obligation's tests.");
-        println!("  Tests outside the Contract weren't run; they may catch it too.");
+        if !whole {
+            println!("  Tests outside the Contract weren't run; they may catch it too.");
+        }
     }
     if v.problems.is_empty() && !tried.is_empty() {
         println!("\nEvery mutant of {primitive} is caught or declared.");
@@ -341,6 +379,7 @@ fn finish(
     Ran {
         problems: v.problems,
         json: doc,
+        outside: Outside::new(),
     }
 }
 

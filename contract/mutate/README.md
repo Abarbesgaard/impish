@@ -96,6 +96,18 @@ must catch at least one mutant too.
 - **kind:** functional
 - **status:** active
 
+### A15 — Witnesses outside the Contract are named
+- **must:** with `--whole-suite`, also run every test target outside the contract target against each mutant the contract tests build and finish, and name each outside test that catches a mutant no contract test catches, as a witness of a missing obligation; in `--format json`, list the outside tests that catch each mutant
+- **why:** a test the Contract doesn't hold catching what the Contract misses is evidence of an obligation nobody wrote down (rule 28, #33)
+- **kind:** functional
+- **status:** active
+
+### A16 — Duplicates outside the Contract fail
+- **must:** with `--whole-suite` and no primitive or `--since`, fail, naming each outside test that catches at least one mutant and whose every catch the contract tests catch too; with a primitive or `--since`, say that duplicates need a run of everything instead
+- **why:** the Contract test is the spec, so a copy of its catches outside the Contract costs CPU and proves nothing new (rule 26, #33); an outside test may guard another primitive's code, so only a run of every primitive can call it a duplicate
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate.rs::primitives
@@ -105,7 +117,13 @@ src/mutate/since.rs::touch_contract
 src/mutate/since.rs::touch
 src/mutate/since.rs::hunk
 src/mutate.rs::finish
-src/mutate.rs::record
+src/mutate/record.rs::record
+src/mutate/suite.rs::tally
+src/mutate/suite.rs::merge
+src/mutate/suite.rs::duplicates
+src/mutate/suite.rs::duplicate
+src/mutate/suite.rs::witnessed
+src/mutate/suite.rs::annotate
 src/contract.rs::fingerprint
 src/mutate/judge.rs::judge
 src/mutate/judge.rs::json
