@@ -29,8 +29,13 @@ enum Command {
     /// obligations whose tests caught it; fail on an obligation that catches
     /// nothing. Needs cargo-mutants.
     Mutate {
-        /// The primitive, a directory under contract/.
-        primitive: String,
+        /// The primitive, a directory under contract/; every primitive that
+        /// covers code when left out.
+        primitive: Option<String>,
+        /// Mutate only the covered lines changed since the merge base with
+        /// this ref, and all of a primitive whose Contract or tests changed.
+        #[arg(long, value_name = "REF", conflicts_with = "write")]
+        since: Option<String>,
         /// Record in contract/coverage.json whether the primitive's mutate is
         /// met; `check` fails once what it rests on changes.
         #[arg(long)]
@@ -74,8 +79,15 @@ fn run() -> anyhow::Result<ExitCode> {
         Command::Check { write, format } => check::run(root(&cwd)?, write, format == Format::Json),
         Command::Mutate {
             primitive,
+            since,
             write,
             format,
-        } => mutate::run(root(&cwd)?, &primitive, write, format == Format::Json),
+        } => mutate::run(
+            root(&cwd)?,
+            primitive.as_deref(),
+            since.as_deref(),
+            write,
+            format == Format::Json,
+        ),
     }
 }

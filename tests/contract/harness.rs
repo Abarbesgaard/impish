@@ -242,13 +242,43 @@ pub fn calc_crate(tests: &str) -> Project {
 }
 
 impl Project {
+    /// Commits every file, starting a git repository if there is none.
+    pub fn commit(&self) {
+        for args in [
+            &["init", "-q"][..],
+            &["add", "-A"],
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "-qm",
+                "c",
+            ],
+        ] {
+            let ok = Command::new("git")
+                .args(args)
+                .current_dir(self.path())
+                .status()
+                .unwrap()
+                .success();
+            assert!(ok, "git {args:?}");
+        }
+    }
+
     pub fn mutate(&self, primitive: &str) -> Checked {
         self.mutate_with(primitive, &[])
     }
 
     pub fn mutate_with(&self, primitive: &str, args: &[&str]) -> Checked {
+        self.mutate_args(&[&[primitive], args].concat())
+    }
+
+    /// `cargo impish mutate` with `args`, which may name no primitive.
+    pub fn mutate_args(&self, args: &[&str]) -> Checked {
         let out = Command::new(env!("CARGO_BIN_EXE_cargo-impish"))
-            .args(["mutate", primitive])
+            .arg("mutate")
             .args(args)
             .current_dir(self.0.path())
             .env(

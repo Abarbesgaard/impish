@@ -84,8 +84,26 @@ must catch at least one mutant too.
 - **kind:** persisted-format
 - **status:** active
 
+### A13 — With no primitive, mutate them all
+- **must:** with no primitive named, mutate every primitive that covers code, one after another, skip the ones that cover none, and fail if any one's Contract isn't met; with `--format json`, print one document holding each primitive's document
+- **why:** CI shouldn't have to list the primitives (#32)
+- **kind:** functional
+- **status:** active
+
+### A14 — --since mutates what changed
+- **must:** with `--since <ref>`, mutate only the covered lines changed since the merge base with `<ref>`, uncommitted work included, and every covered line of a primitive whose `contract/<primitive>/` or `tests/contract/<primitive>.rs` changed; on such a partial run, never call an obligation hollow, a test blind or a declaration unmatched; refuse `--write`
+- **why:** a PR re-mutating everything a primitive covers is slow, and holds unchanged code the PR didn't touch (#32)
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
+src/mutate.rs::primitives
+src/mutate.rs::mutate
+src/mutate/since.rs::since
+src/mutate/since.rs::touch_contract
+src/mutate/since.rs::touch
+src/mutate/since.rs::hunk
 src/mutate.rs::finish
 src/mutate.rs::record
 src/contract.rs::fingerprint
