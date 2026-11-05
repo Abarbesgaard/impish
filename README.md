@@ -115,6 +115,8 @@ cargo impish mutate add  # every obligation's tests catch a bug in the code
 | `cargo impish check` | Holds the Contract to its tests. Reports every problem on stderr and exits 1, or says how many obligations held and exits 0. Reads only. |
 | `cargo impish check --write` | Also writes `contract/coverage.json`, the published coverage. Once it exists, `check` fails when it's out of date. |
 | `cargo impish mutate <primitive>` | Breaks the code the primitive's covers block names with [cargo-mutants](https://mutants.rs), on a copy of the project, and credits each kill to the obligations whose tests caught it. Fails on an obligation whose tests catch nothing. Needs `cargo install cargo-mutants`. |
+| `cargo impish mutate` | With no primitive, mutates every primitive that covers code, and fails if any one's Contract isn't met. |
+| `cargo impish mutate --since <ref>` | Mutates only the covered lines changed since the merge base with `<ref>`, uncommitted work included, and all of a primitive whose Contract or tests changed. A run that sees only some mutants doesn't call obligations hollow or tests blind. |
 | `cargo impish mutate <primitive> --write` | Also records in `contract/coverage.json` whether the primitive's mutate is met, with a fingerprint of its README, `mutants.md`, contract tests and covered files. `check` keeps the result and fails once any of those change. |
 | `--format json` | On `check` or `mutate`: prints one JSON document on stdout instead of the text, with `version`, `met`, every problem, and the counts (for `mutate`, every mutant's outcome and the tests that caught it). Exits the same way. |
 
@@ -304,8 +306,16 @@ jobs:
             contract/coverage.json >> "$GITHUB_STEP_SUMMARY"
 ```
 
-`mutate` runs every test once per mutant, so it is slow for PRs. Run it
-nightly, one job per primitive:
+`mutate` runs every test once per mutant, so a full run is slow for PRs. On a
+PR, mutate only what it changed:
+
+```yaml
+      - run: cargo install cargo-mutants --locked
+      - run: cargo impish mutate --since origin/${{ github.base_ref }}
+```
+
+Check out with `fetch-depth: 0` so the merge base is there. Run the full
+kill matrix nightly, one job per primitive:
 
 ```yaml
 name: Kill matrix

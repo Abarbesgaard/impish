@@ -29,6 +29,7 @@ src/
   mutate/
     scratch.rs  the copy of the project mutate breaks, one mutant at a time
     judge.rs    the verdict on the mutants, and its JSON document
+    since.rs    what changed since a git ref, for `mutate --since`
   contract.rs   reads covers and surface blocks, mutants.md declarations, and
                 #[impish::contract] tags with syn
 ```

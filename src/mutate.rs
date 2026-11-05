@@ -10,13 +10,15 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, anyhow, bail};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 mod judge;
 mod scratch;
+mod since;
 
 use judge::{Verdict, judge};
 use scratch::Scratch;
+use since::Changes;
 
 use crate::contract::{Declared, covers, declarations, fingerprint, tagged_tests};
 use impish_core::obligations;
@@ -61,7 +63,73 @@ enum Outcome {
     TimedOut,
 }
 
-pub fn run(root: &Path, primitive: &str, write: bool, json: bool) -> anyhow::Result<ExitCode> {
+/// Mutates the primitive, or every primitive that covers code; with a
+/// `since` ref, only the mutants on lines changed since its merge base.
+pub fn run(
+    root: &Path,
+    primitive: Option<&str>,
+    since: Option<&str>,
+    write: bool,
+    json: bool,
+) -> anyhow::Result<ExitCode> {
+    let names = match primitive {
+        Some(name) => vec![name.to_string()],
+        None => primitives(root)?,
+    };
+    let changes = since.map(|r| Changes::since(root, r)).transpose()?;
+    let mut met = true;
+    let mut docs = Map::new();
+    for name in &names {
+        let every = primitive.is_none();
+        if let Some(ran) = mutate(root, name, every, changes.as_ref(), write, json)? {
+            met &= ran.problems.is_empty();
+            docs.insert(name.clone(), ran.json);
+        }
+    }
+    if json {
+        match primitive {
+            Some(name) => println!("{}", docs[name]),
+            None => println!("{}", json!({"version": 1, "met": met, "primitives": docs})),
+        }
+    } else if !met {
+        eprintln!("The Contract is not met.");
+    }
+    Ok(if met {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
+/// The directories under contract/ with a README, in order.
+fn primitives(root: &Path) -> anyhow::Result<Vec<String>> {
+    let dir = root.join("contract");
+    let mut names: Vec<String> = fs::read_dir(&dir)
+        .with_context(|| format!("read {}", dir.display()))?
+        .flatten()
+        .filter(|entry| entry.path().join("README.md").is_file())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
+/// What one primitive's run found.
+struct Ran {
+    problems: Vec<String>,
+    json: Value,
+}
+
+/// Mutates one primitive and reports it; `None` when `every` primitive is
+/// being mutated and this one covers no code.
+fn mutate(
+    root: &Path,
+    primitive: &str,
+    every: bool,
+    changes: Option<&Changes>,
+    write: bool,
+    json: bool,
+) -> anyhow::Result<Option<Ran>> {
     let readme_file = format!("contract/{primitive}/README.md");
     let readme =
         fs::read_to_string(root.join(&readme_file)).with_context(|| format!("no {readme_file}"))?;
@@ -77,6 +145,12 @@ pub fn run(root: &Path, primitive: &str, write: bool, json: bool) -> anyhow::Res
         .collect::<Result<Vec<_>, _>>()
         .map_err(|line| anyhow!("{readme_file}: covers line `{line}` is not <file>::<function>"))?;
     if targets.is_empty() {
+        if every {
+            if !json {
+                println!("{primitive}: covers no code, so there is nothing to mutate\n");
+            }
+            return Ok(None);
+        }
         bail!("{readme_file} covers no code, so there is nothing to mutate");
     }
     let declared_file = format!("contract/{primitive}/mutants.md");
@@ -102,7 +176,7 @@ pub fn run(root: &Path, primitive: &str, write: bool, json: bool) -> anyhow::Res
         if write {
             record(root, primitive, &readme, false)?;
         }
-        return Ok(finish(primitive, &[], &declared, &verdict, json));
+        return Ok(Some(finish(primitive, &[], &declared, verdict, json)));
     }
     let tests_file = format!("tests/contract/{primitive}.rs");
     let tests =
@@ -113,9 +187,30 @@ pub fn run(root: &Path, primitive: &str, write: bool, json: bool) -> anyhow::Res
         .map(|t| (format!("{primitive}::{}", t.name), t.tags))
         .collect();
 
-    let mutants = list(root, &targets)?;
+    let mut mutants = list(root, &targets)?;
     if mutants.is_empty() {
         bail!("cargo-mutants finds no mutants in the code {readme_file} covers");
+    }
+    // A run that sees only some mutants can't call an obligation hollow, a
+    // test blind, or a declaration unmatched.
+    let full = changes.is_none_or(|c| c.touch_contract(primitive));
+    if let Some(changes) = changes.filter(|_| !full) {
+        mutants.retain(|m| changes.touch(&m.file, m.span.start.line, m.span.end.line));
+        if mutants.is_empty() {
+            if !json {
+                println!(
+                    "{primitive}: no covered line changed since {}\n",
+                    changes.reference
+                );
+            }
+            return Ok(Some(finish(
+                primitive,
+                &[],
+                &declared,
+                Verdict::default(),
+                json,
+            )));
+        }
     }
     let scratch = Scratch::copy(root)?;
     let exe = scratch
@@ -169,11 +264,11 @@ pub fn run(root: &Path, primitive: &str, write: bool, json: bool) -> anyhow::Res
     }
     let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
     let tests: Vec<&str> = tags.keys().map(String::as_str).collect();
-    let verdict = judge(&active, &tests, &tried, &declared, &declared_file);
+    let verdict = judge(&active, &tests, &tried, &declared, &declared_file, full);
     if write {
         record(root, primitive, &readme, verdict.problems.is_empty())?;
     }
-    Ok(finish(primitive, &tried, &declared, &verdict, json))
+    Ok(Some(finish(primitive, &tried, &declared, verdict, json)))
 }
 
 /// Records in contract/coverage.json whether the primitive's mutate is met,
@@ -203,22 +298,20 @@ fn key(m: &Mutant) -> String {
     format!("{}: {rest}", m.file)
 }
 
-/// Reports the verdict, as JSON or as the kill matrix and the problems.
+/// Reports one primitive's verdict as text, unless the run reports JSON.
 fn finish(
     primitive: &str,
     tried: &[(&Mutant, &Outcome)],
     declared: &[Declared],
-    v: &Verdict,
+    v: Verdict,
     json: bool,
-) -> ExitCode {
-    let code = if v.problems.is_empty() {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    };
+) -> Ran {
+    let doc = judge::json(primitive, tried, declared, &v);
     if json {
-        println!("{}", judge::json(primitive, tried, declared, v));
-        return code;
+        return Ran {
+            problems: v.problems,
+            json: doc,
+        };
     }
     if !tried.is_empty() {
         println!(
@@ -239,15 +332,16 @@ fn finish(
         println!("  unique: caught by no other obligation's tests.");
         println!("  Tests outside the Contract weren't run; they may catch it too.");
     }
-    if v.problems.is_empty() {
+    if v.problems.is_empty() && !tried.is_empty() {
         println!("\nEvery mutant of {primitive} is caught or declared.");
-        return code;
     }
     for problem in &v.problems {
         eprintln!("{problem}");
     }
-    eprintln!("The Contract is not met.");
-    code
+    Ran {
+        problems: v.problems,
+        json: doc,
+    }
 }
 
 /// The mutants cargo-mutants makes of the covered functions, in its order.

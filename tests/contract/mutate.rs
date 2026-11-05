@@ -1,6 +1,6 @@
 use std::time::{Duration, SystemTime};
 
-use crate::harness::{NOT_MET, calc_crate};
+use crate::harness::{NOT_MET, Project, calc_crate, readme, test_fn};
 
 const ADDS: &str = "#[impish::contract(\"calc/A1\")]\n\
                     fn adds() {\n    assert_eq!(calc::add(2, 3), 5);\n}\n\n";
@@ -427,4 +427,126 @@ fn write_records_whether_mutate_is_met() {
     let result = &doc["primitives"]["calc"]["mutate"];
     assert_eq!(result["met"], false);
     assert_ne!(result["fingerprint"], fingerprint.as_str());
+}
+
+/// calc, plus neg covering negate with `negates`, plus plain, which covers
+/// no code.
+fn three_primitives(negates: &str) -> Project {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES_EVERY_WAY}"));
+    p.write(
+        "contract/neg/README.md",
+        &(readme(&["A1"]) + "```covers\nsrc/lib.rs::negate\n```\n"),
+    )
+    .write("tests/contract/neg.rs", negates)
+    .write("contract/plain/README.md", &readme(&["A1"]))
+    .write("tests/contract/plain.rs", &test_fn("plain", &["plain/A1"]))
+    .write(
+        "tests/contract/main.rs",
+        "mod calc;\nmod neg;\nmod plain;\n",
+    );
+    p
+}
+
+const NEGATES: &str = "#[impish::contract(\"neg/A1\")]\n\
+                       fn negates() {\n    assert_eq!(calc::negate(2), -2);\n}\n";
+
+#[impish::contract("mutate/A13")]
+fn no_primitive_mutates_every_one() {
+    let p = three_primitives(NEGATES);
+
+    let out = p.mutate_args(&[]);
+
+    assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("calc: "), "{}", out.stdout);
+    assert!(
+        out.stdout
+            .contains("Every mutant of calc is caught or declared.")
+    );
+    assert!(
+        out.stdout
+            .contains("Every mutant of neg is caught or declared.")
+    );
+    assert!(
+        out.stdout
+            .contains("plain: covers no code, so there is nothing to mutate\n"),
+        "{}",
+        out.stdout
+    );
+
+    p.write(
+        "tests/contract/neg.rs",
+        "#[impish::contract(\"neg/A1\")]\nfn negates() {\n    let _ = calc::negate(2);\n}\n",
+    );
+    let out = p.mutate_args(&["--format", "json"]);
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["version"], 1);
+    assert_eq!(doc["met"], false);
+    assert_eq!(doc["primitives"]["calc"]["met"], true);
+    assert_eq!(doc["primitives"]["neg"]["met"], false);
+    assert!(doc["primitives"]["plain"].is_null(), "{doc}");
+
+    let out = p.mutate_args(&[]);
+    assert_eq!(out.code, Some(1));
+    assert!(out.stderr.contains("neg/A1 is hollow"), "{}", out.stderr);
+    assert_eq!(out.stderr.matches(NOT_MET).count(), 1, "{}", out.stderr);
+}
+
+#[impish::contract("mutate/A14")]
+fn since_mutates_what_changed() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    p.commit();
+    let since = |r: &str| p.mutate_with("calc", &["--since", r]);
+    let nothing = "calc: no covered line changed since HEAD\n\n";
+
+    let out = since("HEAD");
+    assert_eq!((out.code, out.stdout.as_str()), (Some(0), nothing));
+
+    // Two lines ending just above double's body touch neither function.
+    let lib = p.read("src/lib.rs");
+    let lib = lib.replace(
+        "}\n\npub fn double(a: i32) -> i32 {\n",
+        "}\n// twice\npub fn double(a: i32) -> i32 { // a + a\n",
+    );
+    p.write("src/lib.rs", &lib);
+    let out = since("HEAD");
+    assert_eq!((out.code, out.stdout.as_str()), (Some(0), nothing));
+
+    p.write("src/lib.rs", &lib.replace("a + b", "b + a"));
+    let out = since("HEAD");
+    assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout.contains(" in add  killed by calc/A1\n"),
+        "{}",
+        out.stdout
+    );
+    assert!(!out.stdout.contains(" in double "), "{}", out.stdout);
+    assert!(!out.stderr.contains("hollow") && !out.stderr.contains("blind"));
+    p.commit();
+
+    let lib = p.read("src/lib.rs");
+    p.write(
+        "src/lib.rs",
+        &lib.replace("    a * 2\n", "    let b = a;\n    a + b\n"),
+    );
+    let out = since("HEAD");
+    assert!(out.stdout.contains(" in double "), "{}", out.stdout);
+    assert!(!out.stdout.contains(" in add "), "{}", out.stdout);
+    p.write("src/lib.rs", &lib);
+
+    let tests = p.read("tests/contract/calc.rs");
+    p.write("tests/contract/calc.rs", &format!("{tests}\n"));
+    let out = since("HEAD");
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    assert!(out.stdout.contains(" in add "), "{}", out.stdout);
+    assert!(
+        out.stderr.contains(&format!("{SURVIVOR} survived")),
+        "{}",
+        out.stderr
+    );
+
+    assert_eq!(
+        p.mutate_with("calc", &["--since", "HEAD", "--write"]).code,
+        Some(2)
+    );
 }

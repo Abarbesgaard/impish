@@ -2,7 +2,7 @@
 members = ["core", "impish"]
 
 [workspace.package]
-version = "0.6.14"
+version = "0.6.15"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Abarbesgaard/impish"
@@ -10,8 +10,8 @@ repository = "https://github.com/Abarbesgaard/impish"
 # Published crates need a version on every path dependency. A caret
 # requirement keeps matching as the workspace version moves, until 0.7.
 [workspace.dependencies]
-impish = { path = "impish", version = "0.6.14" }
-impish-core = { path = "core", version = "0.6.14" }
+impish = { path = "impish", version = "0.6.15" }
+impish-core = { path = "core", version = "0.6.15" }
 
 [package]
 name = "cargo-impish"

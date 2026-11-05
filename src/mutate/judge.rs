@@ -26,6 +26,7 @@ pub(super) fn judge(
     tried: &[(&Mutant, &Outcome)],
     declared: &[Declared],
     declared_file: &str,
+    full: bool,
 ) -> Verdict {
     let mut v = Verdict::default();
     for (_, outcome) in tried {
@@ -47,7 +48,7 @@ pub(super) fn judge(
                 unique += usize::from(by.len() == 1);
             }
         }
-        if killed == 0 {
+        if full && killed == 0 {
             v.problems.push(format!(
                 "{id} is hollow: its tests catch none of the mutants"
             ));
@@ -58,7 +59,7 @@ pub(super) fn judge(
         let catches = tried
             .iter()
             .any(|(_, o)| matches!(o, Outcome::Killed { tests, .. } if tests.contains(*test)));
-        if !catches {
+        if full && !catches {
             v.problems
                 .push(format!("{test} is blind: it catches none of the mutants"));
         }
@@ -87,7 +88,9 @@ pub(super) fn judge(
         }
         let at = format!("{declared_file}:{}: {}", d.line, d.name);
         if !matched {
-            v.problems.push(format!("{at} matches no mutant"));
+            if full {
+                v.problems.push(format!("{at} matches no mutant"));
+            }
         } else if !by.is_empty() {
             let verb = if by.len() == 1 { "catches" } else { "catch" };
             let by = by.into_iter().collect::<Vec<_>>().join(", ");
