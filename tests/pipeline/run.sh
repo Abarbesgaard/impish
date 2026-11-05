@@ -62,6 +62,20 @@ workflows_mutate_after_the_cheap_checks() {
   ok
 }
 
+# Skipped jobs count as passed, so a job the gate doesn't need can fail and
+# still let the PR merge.
+workflows_gate_needs_every_job() {
+  local f="$root/.github/workflows/ci.yml" jobs needs job missing=""
+  jobs=$(awk '/^jobs:/ { j = 1; next } j && /^  [a-z_-]+:/ { sub(/^  /, ""); sub(/:.*/, ""); print }' "$f")
+  needs=$(awk '/^  ci:/ { c = 1; next } c && /^  [a-z]/ { c = 0 } c && /^    needs:/ { print; exit }' "$f")
+  for job in $jobs; do
+    case "$job" in ci|release) continue ;; esac
+    case "$needs" in *"$job"*) ;; *) missing="$missing $job" ;; esac
+  done
+  [ -z "$missing" ] || { bad "the CI gate doesn't need:$missing"; return; }
+  ok
+}
+
 # ── scripts ────────────────────────────────────────────────────────────────
 
 scripts_parse() {

@@ -10,7 +10,8 @@ name: CI
 #   Workflow security ──┤
 #   Similar code (PRs) ─┼─ Mutants (PRs) ─┬─ CI ── Release (main, new version)
 #   Version (PRs) ──────┤                 │
-#   Test ───────────────┴─────────────────┘
+#   Test ───────────────┴─────────────────┤
+#   Portability ──────────────────────────┘
 #
 # Format and Clippy: fmt, clippy, and the pipeline's own scripts (tests/pipeline).
 # Dependency policy: cargo-deny; licences, sources, advisories (deny.toml).
@@ -18,6 +19,8 @@ name: CI
 # Similar code:      no new near-duplicate functions (scripts/similar-code.sh).
 # Version:           a change to what ships bumps the version (scripts/shipped.sh).
 # Test:              the suite, then `cargo impish check` on impish itself.
+# Portability:       the suite on macOS and Windows; on macOS, the pipeline's
+#                    scripts under its bash 3.2 too.
 # Mutants:           every line the PR changes is mutated; a survivor fails.
 # Release:           publishes the crates and a GitHub release for a new version.
 on:
@@ -98,6 +101,36 @@ jobs:
               (if (.uncovered // []) | length > 0 then "\n**Not yet in the Contract:** \(.uncovered | join(", "))" else empty end)
             ' contract/coverage.json
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # #38 (a stale mutant build) happened only on macOS, and users run impish
+  # on macOS and Windows too.
+  portability:
+    name: Portability (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: cargo-mutants
+      - run: cargo test
+      # The Lint job runs shellcheck; this checks the scripts run on bash 3.2.
+      - name: Pipeline scripts under /bin/bash
+        if: runner.os == 'macOS'
+        run: tests/pipeline/run.sh
+        env:
+          BASH_UNDER_TEST: /bin/bash
+          SHELLCHECK: '0'
 
   deny:
     name: Dependency policy
@@ -237,7 +270,7 @@ jobs:
   # let a failure through; this one fails if anything failed or was cancelled.
   ci:
     name: CI
-    needs: [lint, test, deny, zizmor, mutants, similar, version]
+    needs: [lint, test, portability, deny, zizmor, mutants, similar, version]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
