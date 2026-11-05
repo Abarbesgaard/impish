@@ -76,6 +76,12 @@ workflows_gate_needs_every_job() {
   ok
 }
 
+workflows_lint_fails_on_unused_dependencies() {
+  local lint
+  lint=$(awk '/^  lint:/ { l = 1; next } l && /^  [a-z]/ { exit } l' "$root/.github/workflows/ci.yml")
+  case "$lint" in *"run: cargo machete"*) ok ;; *) bad "Lint doesn't run cargo machete" ;; esac
+}
+
 workflows_cache_saves_from_main_only() {
   local f bad_steps=""
   for f in "$root"/.github/workflows/*.yml; do
