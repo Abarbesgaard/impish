@@ -7,6 +7,7 @@
 //!   core/src     impish-core: the Contract's README format, pure
 //!   impish/src   #[impish::contract]: the attribute, on top of core
 //!   src          cargo-impish: main → {check, mutate} → contract, on top of core;
+//!                main → conditions → decisions, and check → decisions;
 //!                mutate's scratch copy lives in src/mutate/
 
 use archunit::{
@@ -45,20 +46,29 @@ fn uses_any(f: &FileInfo, needles: &[&str]) -> bool {
 
 #[test]
 fn binary_layers_depend_inwards() {
-    // check and mutate are the commands; they share the Contract's reading, not each other.
+    // check, mutate and conditions are the commands; they share the Contract's
+    // reading, not each other.
     let rule = project_layers()
         .layer("main")
         .defined_by("src/main.rs")
         .layer("check")
-        .defined_by("src/check.rs")
+        .defined_by("src/check**")
+        .layer("conditions")
+        .defined_by("src/conditions.rs")
+        .layer("decisions")
+        .defined_by("src/decisions**")
         .layer("mutate")
         .defined_by("src/mutate**")
         .layer("contract")
         .defined_by("src/contract.rs")
         .where_layer("contract")
         .may_only_depend_on_layers(&[])
+        .where_layer("decisions")
+        .may_only_depend_on_layers(&[])
+        .where_layer("conditions")
+        .may_only_depend_on_layers(&["decisions"])
         .where_layer("check")
-        .may_only_depend_on_layers(&["contract"])
+        .may_only_depend_on_layers(&["contract", "decisions"])
         .where_layer("mutate")
         .may_only_depend_on_layers(&["contract"]);
 
@@ -141,9 +151,14 @@ fn only_main_parses_the_command_line() {
 }
 
 #[test]
-fn only_check_reads_config() {
+fn only_check_and_decisions_read_toml() {
+    // check reads impish.toml; decisions reads decisions.toml and Cargo.lock.
     let rule = project_files()
-        .in_path(pattern("src/**").except_in_path("src/check.rs"))
+        .in_path(
+            pattern("src/**")
+                .except_in_path("src/check.rs")
+                .except_in_path("src/decisions**"),
+        )
         .should_not()
         .depend_on_external_modules()
         .matching("toml");
@@ -168,6 +183,7 @@ fn only_commands_serialise_and_report() {
         .in_path(
             pattern("src/**")
                 .except_in_path("src/check.rs")
+                .except_in_path("src/conditions.rs")
                 .except_in_path("src/mutate.rs"),
         )
         .should()
@@ -181,7 +197,8 @@ fn only_commands_serialise_and_report() {
                     })
                     .all(|l| f.path.ends_with("src/main.rs") && l == UNDECIDED)
             },
-            "not print (the commands, src/check.rs and src/mutate.rs, report; \
+            "not print (the commands, src/check.rs, src/conditions.rs and \
+             src/mutate.rs, report; \
              main prints only the error that stopped a run)",
         );
 

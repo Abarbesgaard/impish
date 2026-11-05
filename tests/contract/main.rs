@@ -3,5 +3,6 @@
 mod attribute;
 mod check;
 mod cli;
+mod decisions;
 mod harness;
 mod mutate;

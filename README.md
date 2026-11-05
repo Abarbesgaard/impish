@@ -120,6 +120,7 @@ cargo impish mutate add  # every obligation's tests catch a bug in the code
 | `cargo impish mutate -j <n>` | Tries up to n mutants at once, each in its own copy of the project under `target/impish/mutate/` with its own target directory. Defaults to half the cores. Output is the same as one at a time. Each copy's first build is a full build, so more jobs means more disk. |
 | `cargo impish mutate --whole-suite` | Also runs every test outside the contract target against each mutant. Names an outside test that catches a mutant the Contract misses as a witness of a missing obligation. With no primitive and no `--since`, fails on each outside test whose every catch the contract tests make too: it duplicates the Contract. Doc tests aren't run. |
 | `cargo impish mutate <primitive> --write` | Also records in `contract/coverage.json` whether the primitive's mutate is met, with a fingerprint of its README, `mutants.md`, contract tests and covered files. `check` keeps the result and fails once any of those change. |
+| `cargo impish conditions` | Re-checks the conditions of every decision record in `contract/decisions.toml` and `contract/<primitive>/decisions.toml`: a crate in `Cargo.lock` (optionally at a version), a set environment variable, a file in the project, or the rustc version. Prints each record as ok or suspect, lists prose conditions as not machine-checkable, and exits 1 when a record is suspect. See [contract/README.md](https://github.com/Abarbesgaard/impish/blob/main/contract/README.md#decision-records) for the format. |
 | `--format json` | On `check` or `mutate`: prints one JSON document on stdout instead of the text, with `version`, `met`, every problem, and the counts (for `mutate`, every mutant's outcome and the tests that caught it). Exits the same way. |
 
 ## When it fails
@@ -167,7 +168,7 @@ notice a bug. It breaks the covered code one change at a time (a mutant), runs
 the primitive's contract tests, and credits each failure to the obligations
 the failing tests name. It is strict: every mutant must be caught, or declared
 in `contract/<primitive>/mutants.md` with a reason
-([0011](https://github.com/Abarbesgaard/impish/blob/main/docs/decisions/0011-mutate-is-strict.md)):
+([D11](https://github.com/Abarbesgaard/impish/blob/main/contract/decisions.toml)):
 
 ```text
 $ cargo impish mutate calc
@@ -360,7 +361,7 @@ impish's own [CI](https://github.com/Abarbesgaard/impish/blob/main/.github/workf
 ## Contributing
 
 [ARCHITECTURE.md](https://github.com/Abarbesgaard/impish/blob/main/ARCHITECTURE.md) says where each part lives and which
-guardrails fire on a change; [docs/decisions](https://github.com/Abarbesgaard/impish/tree/main/docs/decisions/) says why.
+guardrails fire on a change; [contract/decisions.toml](https://github.com/Abarbesgaard/impish/blob/main/contract/decisions.toml) says why.
 
 ## License
 

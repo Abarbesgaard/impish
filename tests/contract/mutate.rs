@@ -422,6 +422,14 @@ fn write_records_whether_mutate_is_met() {
     assert_eq!(fingerprint.len(), 16, "{result}");
     assert_eq!(doc, published, "--write changed more than the result");
 
+    // The covered code is part of what the result rests on.
+    let lib = p.read("src/lib.rs");
+    p.write("src/lib.rs", &format!("{lib}// edited\n"));
+    let stale = "contract/coverage.json: the mutate result for calc is stale; \
+                 run `cargo impish mutate calc --write`";
+    assert!(p.check().reports(stale), "{}", p.check().stderr);
+    p.write("src/lib.rs", &lib);
+
     p.write("tests/contract/calc.rs", &format!("{ADDS}{DOUBLES}"));
     assert_eq!(p.mutate_with("calc", &["--write"]).code, Some(1));
     let doc: serde_json::Value = serde_json::from_str(&p.read("contract/coverage.json")).unwrap();
