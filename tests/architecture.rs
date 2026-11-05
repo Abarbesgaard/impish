@@ -157,11 +157,12 @@ fn only_main_parses_the_command_line() {
 
 #[test]
 fn only_check_and_decisions_read_toml() {
-    // check reads impish.toml; decisions reads decisions.toml and Cargo.lock.
+    // check reads impish.toml and scope.toml; decisions reads decisions.toml
+    // and Cargo.lock.
     let rule = project_files()
         .in_path(
             pattern("src/**")
-                .except_in_path("src/check.rs")
+                .except_in_path("src/check**")
                 .except_in_path("src/decisions**"),
         )
         .should_not()

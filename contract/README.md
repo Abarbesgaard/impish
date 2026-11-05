@@ -136,3 +136,25 @@ repeated id, an unknown field, or a `record:`, `depends_on` or
 `cargo impish conditions` re-checks every condition and prints ok or suspect
 per record. Prose conditions count as not machine-checkable. It exits 1 when
 any record is suspect.
+
+## Scope ceilings
+
+`contract/scope.toml` caps what the project may grow to, so a machine says when
+it has outgrown what one person can read (rule 17). One `[[ceiling]]` each:
+
+```toml
+[[ceiling]]
+name = "source lines"          # required
+counts = "lines"               # required: files, lines or functions
+glob = "src/**/*.rs"           # required, relative to the project root
+ceiling = 4000                 # required, above 0
+why = "one person can read it" # required
+record = "D12"                 # optional decision record
+```
+
+`files` counts the files the glob matches, `lines` their non-blank lines and
+`functions` the functions, methods and nested functions in the matched `.rs`
+files. `target/` and hidden directories are left out. `check` fails when a
+count is over its ceiling, or on a malformed ceiling or a glob that matches no
+file, and otherwise prints each count against its ceiling. `--write` records
+each ceiling, but not its count, in `contract/coverage.json`.

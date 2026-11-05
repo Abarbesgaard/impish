@@ -9,6 +9,7 @@ use anyhow::{Context, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
+mod scope;
 mod stray;
 
 use crate::contract::{covers, escapes, fingerprint, intent, surface, tagged_tests};
@@ -74,6 +75,8 @@ struct Report {
     kinds: BTreeMap<String, usize>,
     /// Per primitive: its active obligations and its surface lines.
     covered: BTreeMap<String, (usize, Vec<String>)>,
+    /// The ceilings in contract/scope.toml that could be counted.
+    scope: Vec<scope::Ceiling>,
 }
 
 /// What `contract/coverage.json` holds.
@@ -102,6 +105,19 @@ fn coverage(report: &Report) -> Value {
                 .filter(|l| !covered.contains(l))
                 .collect::<Vec<_>>()
         );
+    }
+    if !report.scope.is_empty() {
+        let scope: Map<String, Value> = report
+            .scope
+            .iter()
+            .map(|c| {
+                (
+                    c.name.clone(),
+                    json!({"counts": c.counts, "ceiling": c.ceiling}),
+                )
+            })
+            .collect();
+        value["scope"] = Value::Object(scope);
     }
     value
 }
@@ -140,6 +156,9 @@ pub fn run(root: &Path, write: bool, json: bool) -> anyhow::Result<ExitCode> {
             "The Contract holds: {} obligations across {} primitives.",
             report.obligations, report.primitives
         );
+        for c in &report.scope {
+            println!("{}: {} of at most {}", c.name, c.count, c.ceiling);
+        }
         return Ok(ExitCode::SUCCESS);
     }
     for problem in &report.problems {
@@ -201,6 +220,7 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         real: None,
         kinds: BTreeMap::new(),
         covered: BTreeMap::new(),
+        scope: Vec::new(),
     };
     let mut cited = Vec::new();
     for name in &names {
@@ -328,6 +348,10 @@ fn check(root: &Path) -> anyhow::Result<Report> {
             report.problems.extend(intent(&file, &text));
         }
     }
+    let scope = scope::scope(root);
+    report.problems.extend(scope.problems);
+    report.scope = scope.ceilings;
+    cited.extend(scope.cited);
     let (records, problems) = decisions::read(root);
     report.problems.extend(problems);
     report

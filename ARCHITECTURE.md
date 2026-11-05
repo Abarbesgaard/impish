@@ -25,6 +25,7 @@ src/
   main.rs       parses the command line (clap) and finds the nearest contract/
   check.rs      `cargo impish check`: holds the Contract to its tests, writes coverage
   check/
+    scope.rs    the ceilings in contract/scope.toml, counted
     stray.rs    contract tags and tests outside the primitives' test files
   conditions.rs `cargo impish conditions`: re-checks the decision records' conditions
   decisions.rs  reads decision records from contract/, checks their shape and references
@@ -50,7 +51,7 @@ src/
 `main` calls the commands; `check` and `mutate` both build on `contract`, never
 on each other; `check` and `conditions` both build on `decisions`, which knows
 neither; `regen` builds on `contract` alone; `contract` does no I/O. Only the commands read or write files,
-run processes or print, and only `check` (`impish.toml`) and `decisions`
+run processes or print, and only `check` (`impish.toml`, `scope.toml`) and `decisions`
 (`decisions.toml`, `Cargo.lock`) read TOML. `main` prints
 one thing: the error that stopped a run, which exits 2 (undecided), not 1
 (not met).
@@ -95,6 +96,7 @@ merges itself (rule 27).
 | Tests, then `cargo impish check` on impish itself | CI `test` |
 | The suite on macOS and Windows | CI `portability` |
 | Architecture: the dependency directions and boundaries above, file size | `tests/architecture.rs` ([D8](contract/decisions.toml)) |
+| Size of the whole crate: primitives, files, lines, functions | `contract/scope.toml`, held by `cargo impish check` |
 | Dependency licences, sources and advisories | CI `deny`, `deny.toml`; nightly `audit.yml` |
 | Workflow security | CI `zizmor` |
 | No unused dependency | CI `lint`, `cargo machete` |
