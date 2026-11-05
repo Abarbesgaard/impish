@@ -46,6 +46,7 @@ src/regen.rs::files
 src/regen/stubs.rs::stubs
 src/regen/stubs.rs::offset
 src/regen/stubs.rs::head
+src/regen/stubs.rs::stub
 src/regen/stubs.rs::visit_item_fn
 src/regen/stubs.rs::visit_item_impl
 src/regen/stubs.rs::visit_impl_item_fn

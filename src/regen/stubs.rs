@@ -5,7 +5,7 @@
 use proc_macro2::LineColumn;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
-use syn::{ImplItemFn, ItemFn, ItemImpl};
+use syn::{ImplItemFn, ItemFn, ItemImpl, Signature};
 
 /// The stubs of the functions in `src` named in `names`, or `None` when
 /// `src` doesn't parse or defines none of them.
@@ -43,6 +43,27 @@ impl Found<'_> {
             .map_or(self.src.len(), |(i, _)| start + i)
     }
 
+    /// A stub of `item`, whose body opens at `open`, when `names` has it; a
+    /// method goes inside its `impl` header.
+    fn stub(
+        &mut self,
+        item: &impl Spanned,
+        sig: &Signature,
+        open: LineColumn,
+        header: Option<&str>,
+    ) {
+        if !self.names.contains(&sig.ident.to_string().as_str()) {
+            return;
+        }
+        let head = self.head(item, open);
+        self.out.push(match header {
+            None => format!("{head} {{\n    todo!()\n}}\n"),
+            Some(header) => {
+                format!("{header} {{\n    {head} {{\n        todo!()\n    }}\n}}\n")
+            }
+        });
+    }
+
     /// The text from `item`'s first attribute up to the `{` at `open`.
     fn head(&self, item: &impl Spanned, open: LineColumn) -> String {
         let from = self.offset(item.span().start());
@@ -53,10 +74,7 @@ impl Found<'_> {
 impl<'ast> Visit<'ast> for Found<'_> {
     fn visit_item_fn(&mut self, f: &'ast ItemFn) {
         // Never into the body: a nested function is implementation.
-        if self.names.contains(&f.sig.ident.to_string().as_str()) {
-            let sig = self.head(f, f.block.brace_token.span.open().start());
-            self.out.push(format!("{sig} {{\n    todo!()\n}}\n"));
-        }
+        self.stub(f, &f.sig, f.block.brace_token.span.open().start(), None);
     }
 
     fn visit_item_impl(&mut self, i: &'ast ItemImpl) {
@@ -67,13 +85,9 @@ impl<'ast> Visit<'ast> for Found<'_> {
     }
 
     fn visit_impl_item_fn(&mut self, f: &'ast ImplItemFn) {
-        if self.names.contains(&f.sig.ident.to_string().as_str())
-            && let Some(header) = &self.header
-        {
-            let sig = self.head(f, f.block.brace_token.span.open().start());
-            self.out.push(format!(
-                "{header} {{\n    {sig} {{\n        todo!()\n    }}\n}}\n"
-            ));
+        if let Some(header) = self.header.clone() {
+            let open = f.block.brace_token.span.open().start();
+            self.stub(f, &f.sig, open, Some(&header));
         }
     }
 }
