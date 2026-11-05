@@ -1,0 +1,46 @@
+name: Similar backlog
+
+# The exhale of Impatient Programming's rule 12: the Similar code gate stops
+# new near-duplicate functions, and this reports the ones already in the
+# crates. Each night it files an issue (label similar-code, at most 3 a night)
+# per cluster of similar functions not filed before; closing one means "keep
+# it". Never fails on existing pairs.
+
+on:
+  schedule:
+    - cron: "43 2 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: similar-backlog
+  cancel-in-progress: false
+
+# Every step runs with -o pipefail, so `script | tee` fails when the script does.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  report:
+    name: Similar backlog
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: similarity-rs
+      - name: Report and file clusters
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '### Similar backlog'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          scripts/similar-backlog.sh --file-issues | tee -a "${GITHUB_STEP_SUMMARY}"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
