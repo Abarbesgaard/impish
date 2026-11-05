@@ -50,6 +50,15 @@ pub fn fingerprint(primitive: &str, readme: &str, read: impl Fn(&str) -> String)
     format!("{hash:016x}")
 }
 
+/// The sections an intent.md lacks, each a problem naming `file`.
+pub fn intent(file: &str, text: &str) -> Vec<String> {
+    ["## Purpose", "## Public surface"]
+        .into_iter()
+        .filter(|heading| !text.lines().any(|l| l.trim_end() == *heading))
+        .map(|heading| format!("{file}: no `{heading}` section"))
+        .collect()
+}
+
 /// The `<kind> <name>` lines in a README's surface blocks, or the line that
 /// isn't in that form. A README without the block has no surface.
 pub fn surface(readme: &str) -> Vec<Result<&str, &str>> {

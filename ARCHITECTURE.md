@@ -30,6 +30,9 @@ src/
   decisions.rs  reads decision records from contract/, checks their shape and references
   decisions/
     evaluate.rs judges one condition: dep, env, file or rustc
+  regen.rs      `cargo impish regen`: a pack to rebuild a primitive from its Contract
+  regen/
+    stubs.rs    the covered functions' signatures, with `todo!()` bodies
   mutate.rs     `cargo impish mutate`: a kill matrix per obligation, via cargo-mutants;
                 every mutant caught or declared in mutants.md
   mutate/
@@ -46,7 +49,7 @@ src/
 
 `main` calls the commands; `check` and `mutate` both build on `contract`, never
 on each other; `check` and `conditions` both build on `decisions`, which knows
-neither; `contract` does no I/O. Only the commands read or write files,
+neither; `regen` builds on `contract` alone; `contract` does no I/O. Only the commands read or write files,
 run processes or print, and only `check` (`impish.toml`) and `decisions`
 (`decisions.toml`, `Cargo.lock`) read TOML. `main` prints
 one thing: the error that stopped a run, which exits 2 (undecided), not 1
