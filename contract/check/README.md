@@ -134,6 +134,12 @@ exit code is 2 (cli/A3).
 - **kind:** persisted-format
 - **status:** active
 
+### A25 — A stale mutate result fails
+- **must:** keep each mutate result `mutate --write` recorded in `contract/coverage.json`, also on `--write`, and fail, naming the primitive, when the README, mutants.md, contract tests or covered files it was recorded for have changed since; a primitive with no recorded result passes
+- **why:** a published result must be about the code as it is, and `check` stays static: it compares fingerprints and never runs mutate (#31)
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/check.rs::run
 src/check.rs::check
@@ -144,6 +150,7 @@ src/contract.rs::contract_attributes
 src/contract.rs::surface
 src/check.rs::real_surface
 src/check.rs::coverage
+src/check.rs::mutate_results
 ```
 
 ```surface

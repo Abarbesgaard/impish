@@ -14,6 +14,42 @@ pub fn covers(readme: &str) -> Vec<Result<(&str, &str), &str>> {
         .collect()
 }
 
+/// Whether a covers file could name something outside the crate.
+pub fn escapes(file: &str) -> bool {
+    use std::path::Component::{ParentDir, Prefix, RootDir};
+    std::path::Path::new(file)
+        .components()
+        .any(|c| matches!(c, ParentDir | RootDir | Prefix(_)))
+}
+
+/// A stable hash of what a primitive's mutate result rests on: its README,
+/// its mutants.md, its contract tests and the files its covers block names.
+/// `read` returns a file's text, or "" when there is none.
+pub fn fingerprint(primitive: &str, readme: &str, read: impl Fn(&str) -> String) -> String {
+    let mut files: std::collections::BTreeSet<String> = covers(readme)
+        .into_iter()
+        .flatten()
+        .map(|(file, _)| file)
+        .filter(|file| !escapes(file))
+        .map(String::from)
+        .collect();
+    files.extend([
+        format!("contract/{primitive}/README.md"),
+        format!("contract/{primitive}/mutants.md"),
+        format!("tests/contract/{primitive}.rs"),
+    ]);
+    // FNV-1a, 64-bit: the same on every platform and Rust version.
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for file in &files {
+        let text = read(file);
+        for byte in file.bytes().chain([0]).chain(text.bytes()).chain([0]) {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    format!("{hash:016x}")
+}
+
 /// The `<kind> <name>` lines in a README's surface blocks, or the line that
 /// isn't in that form. A README without the block has no surface.
 pub fn surface(readme: &str) -> Vec<Result<&str, &str>> {

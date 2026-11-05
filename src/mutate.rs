@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, anyhow, bail};
 use serde::Deserialize;
+use serde_json::{Value, json};
 
 mod judge;
 mod scratch;
@@ -17,7 +18,7 @@ mod scratch;
 use judge::{Verdict, judge};
 use scratch::Scratch;
 
-use crate::contract::{Declared, covers, declarations, tagged_tests};
+use crate::contract::{Declared, covers, declarations, fingerprint, tagged_tests};
 use impish_core::obligations;
 
 #[derive(Deserialize)]
@@ -60,7 +61,7 @@ enum Outcome {
     TimedOut,
 }
 
-pub fn run(root: &Path, primitive: &str, json: bool) -> anyhow::Result<ExitCode> {
+pub fn run(root: &Path, primitive: &str, write: bool, json: bool) -> anyhow::Result<ExitCode> {
     let readme_file = format!("contract/{primitive}/README.md");
     let readme =
         fs::read_to_string(root.join(&readme_file)).with_context(|| format!("no {readme_file}"))?;
@@ -98,6 +99,9 @@ pub fn run(root: &Path, primitive: &str, json: bool) -> anyhow::Result<ExitCode>
             problems,
             ..Verdict::default()
         };
+        if write {
+            record(root, primitive, &readme, false)?;
+        }
         return Ok(finish(primitive, &[], &declared, &verdict, json));
     }
     let tests_file = format!("tests/contract/{primitive}.rs");
@@ -166,7 +170,28 @@ pub fn run(root: &Path, primitive: &str, json: bool) -> anyhow::Result<ExitCode>
     let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
     let tests: Vec<&str> = tags.keys().map(String::as_str).collect();
     let verdict = judge(&active, &tests, &tried, &declared, &declared_file);
+    if write {
+        record(root, primitive, &readme, verdict.problems.is_empty())?;
+    }
     Ok(finish(primitive, &tried, &declared, &verdict, json))
+}
+
+/// Records in contract/coverage.json whether the primitive's mutate is met,
+/// with the fingerprint `check` holds it to.
+fn record(root: &Path, primitive: &str, readme: &str, met: bool) -> anyhow::Result<()> {
+    let path = root.join("contract/coverage.json");
+    let mut doc: Value = if path.exists() {
+        let text = fs::read_to_string(&path).context("read contract/coverage.json")?;
+        serde_json::from_str(&text).context("read contract/coverage.json")?
+    } else {
+        json!({})
+    };
+    let fingerprint = fingerprint(primitive, readme, |file| {
+        fs::read_to_string(root.join(file)).unwrap_or_default()
+    });
+    doc["primitives"][primitive]["mutate"] = json!({"met": met, "fingerprint": fingerprint});
+    fs::write(&path, serde_json::to_string_pretty(&doc)? + "\n")
+        .context("write contract/coverage.json")
 }
 
 /// The mutant's name without line and column, as mutants.md declares it.

@@ -398,3 +398,33 @@ fn json_names_each_mutant_its_own_declaration() {
         .collect();
     assert_eq!(declared, [("survived", "unpromised")], "{doc}");
 }
+
+#[impish::contract("mutate/A12")]
+fn write_records_whether_mutate_is_met() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES_EVERY_WAY}"));
+    assert_eq!(p.run(&["check", "--write"]).code, Some(0));
+    let published: serde_json::Value =
+        serde_json::from_str(&p.read("contract/coverage.json")).unwrap();
+
+    let out = p.mutate_with("calc", &["--write"]);
+
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    let mut doc: serde_json::Value =
+        serde_json::from_str(&p.read("contract/coverage.json")).unwrap();
+    let result = doc["primitives"]["calc"]
+        .as_object_mut()
+        .unwrap()
+        .remove("mutate")
+        .expect("a mutate result");
+    assert_eq!(result["met"], true);
+    let fingerprint = result["fingerprint"].as_str().unwrap().to_string();
+    assert_eq!(fingerprint.len(), 16, "{result}");
+    assert_eq!(doc, published, "--write changed more than the result");
+
+    p.write("tests/contract/calc.rs", &format!("{ADDS}{DOUBLES}"));
+    assert_eq!(p.mutate_with("calc", &["--write"]).code, Some(1));
+    let doc: serde_json::Value = serde_json::from_str(&p.read("contract/coverage.json")).unwrap();
+    let result = &doc["primitives"]["calc"]["mutate"];
+    assert_eq!(result["met"], false);
+    assert_ne!(result["fingerprint"], fingerprint.as_str());
+}

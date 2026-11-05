@@ -78,9 +78,17 @@ must catch at least one mutant too.
 - **kind:** persisted-format
 - **status:** active
 
+### A12 — --write records whether mutate is met
+- **must:** with `--write`, record under `primitives.<primitive>.mutate` in `contract/coverage.json` whether the primitive's mutate is met, and a fingerprint of its README, its mutants.md, its contract tests and the files its covers block names; leave the rest of the file as it was
+- **why:** published coverage says which obligations have tests, not whether they bite (rule 29; #31)
+- **kind:** persisted-format
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate.rs::finish
+src/mutate.rs::record
+src/contract.rs::fingerprint
 src/mutate/judge.rs::judge
 src/mutate/judge.rs::json
 src/mutate.rs::key

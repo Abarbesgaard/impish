@@ -9,7 +9,9 @@ use anyhow::{Context, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::contract::{contract_attributes, covers, surface, tagged_tests, test_attributes};
+use crate::contract::{
+    contract_attributes, covers, escapes, fingerprint, surface, tagged_tests, test_attributes,
+};
 use impish_core::obligations;
 
 /// `impish.toml`, at the project root; every key is optional.
@@ -106,7 +108,8 @@ fn coverage(report: &Report) -> Value {
 pub fn run(root: &Path, write: bool, json: bool) -> anyhow::Result<ExitCode> {
     let mut report = check(root)?;
     let path = root.join("contract/coverage.json");
-    let published = coverage(&report);
+    let mut published = coverage(&report);
+    mutate_results(root, &mut published, &mut report.problems);
     let text = serde_json::to_string_pretty(&published)? + "\n";
     if write {
         fs::write(&path, text).context("write contract/coverage.json")?;
@@ -143,6 +146,38 @@ pub fn run(root: &Path, write: bool, json: bool) -> anyhow::Result<ExitCode> {
     }
     eprintln!("The Contract is not met.");
     Ok(ExitCode::FAILURE)
+}
+
+/// Carries each primitive's mutate result, recorded by `mutate --write`, into
+/// the published coverage, and names the ones whose fingerprint has changed.
+fn mutate_results(root: &Path, published: &mut Value, problems: &mut Vec<String>) {
+    let Some(recorded) = fs::read_to_string(root.join("contract/coverage.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+    else {
+        return;
+    };
+    let Some(primitives) = published["primitives"].as_object_mut() else {
+        return;
+    };
+    for (name, entry) in primitives {
+        let result = &recorded["primitives"][name.as_str()]["mutate"];
+        if result.is_null() {
+            continue;
+        }
+        let readme =
+            fs::read_to_string(root.join(format!("contract/{name}/README.md"))).unwrap_or_default();
+        let now = fingerprint(name, &readme, |file| {
+            fs::read_to_string(root.join(file)).unwrap_or_default()
+        });
+        if result["fingerprint"] != now.as_str() {
+            problems.push(format!(
+                "contract/coverage.json: the mutate result for {name} is stale; \
+                 run `cargo impish mutate {name} --write`"
+            ));
+        }
+        entry["mutate"] = result.clone();
+    }
 }
 
 fn check(root: &Path) -> anyhow::Result<Report> {
@@ -279,14 +314,6 @@ fn check(root: &Path) -> anyhow::Result<Report> {
     report.problems.extend(stray_tests(root, &names));
     report.real = real;
     Ok(report)
-}
-
-/// Whether a covers file could name something outside the crate.
-fn escapes(file: &str) -> bool {
-    use std::path::Component::{ParentDir, Prefix, RootDir};
-    Path::new(file)
-        .components()
-        .any(|c| matches!(c, ParentDir | RootDir | Prefix(_)))
 }
 
 fn defines(root: &Path, file: &str, func: &str) -> bool {

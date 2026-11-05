@@ -1,4 +1,4 @@
-use crate::harness::{NOT_MET, Project, calc, readme, test_fn};
+use crate::harness::{NOT_MET, Project, calc, calc_crate, readme, test_fn};
 
 #[impish::contract("check/A1")]
 fn a_held_contract_passes_and_says_what_it_checked() {
@@ -599,4 +599,43 @@ fn json_reports_what_the_text_does() {
     let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
     assert_eq!(doc["met"], true);
     assert_eq!(doc["problems"], serde_json::json!([]));
+}
+
+#[impish::contract("check/A25")]
+fn a_stale_mutate_result_fails() {
+    let p = calc_crate(&test_fn("adds", &["calc/A1, calc/A2"]));
+    assert_eq!(p.check().code, Some(0));
+    p.mutate_with("calc", &["--write"]);
+    let result = |p: &Project| {
+        let doc: serde_json::Value =
+            serde_json::from_str(&p.read("contract/coverage.json")).unwrap();
+        doc["primitives"]["calc"]["mutate"].clone()
+    };
+    let recorded = result(&p);
+    assert!(recorded["fingerprint"].is_string(), "{recorded}");
+    let out = p.run(&["check", "--write"]);
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    assert_eq!(result(&p), recorded, "--write dropped the result");
+
+    let stale = format!(
+        "contract/coverage.json: the mutate result for calc is stale; \
+         run `cargo impish mutate calc --write`\n{NOT_MET}\n"
+    );
+    for file in [
+        "src/lib.rs",
+        "tests/contract/calc.rs",
+        "contract/calc/README.md",
+    ] {
+        let before = p.read(file);
+        p.write(file, &format!("{before}\n"));
+        let out = p.check();
+        assert_eq!((out.code, out.stderr), (Some(1), stale.clone()), "{file}");
+        p.write(file, &before);
+        assert_eq!(p.check().code, Some(0), "{file}");
+    }
+    p.write("contract/calc/mutants.md", "# Mutants calc leaves alone\n");
+    assert_eq!(p.check().stderr, stale);
+    std::fs::remove_file(p.path().join("contract/calc/mutants.md")).unwrap();
+    p.write("src/other.rs", "pub fn other() {}\n");
+    assert_eq!(p.check().code, Some(0), "an uncovered file made it stale");
 }
