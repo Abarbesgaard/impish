@@ -23,7 +23,8 @@ struct Block<'a> {
     id: u32,
     line: usize,
     fields: BTreeMap<&'a str, &'a str>,
-    record_line: usize,
+    /// The line each field is on.
+    lines: BTreeMap<&'a str, usize>,
 }
 
 /// The obligations a primitive's README declares under `## Obligations`.
@@ -67,7 +68,7 @@ pub fn obligations(readme: &str, file: &str) -> Result<BTreeMap<u32, Obligation>
                         id,
                         line: n,
                         fields: BTreeMap::new(),
-                        record_line: 0,
+                        lines: BTreeMap::new(),
                     })
                 }
                 None => problems.push((n, format!("malformed obligation heading `{line}`"))),
@@ -79,9 +80,7 @@ pub fn obligations(readme: &str, file: &str) -> Result<BTreeMap<u32, Obligation>
                 problems.push((n, format!("unknown field `{name}`")))
             }
             (Some((name, value)), Some(block)) => {
-                if name == "record" {
-                    block.record_line = n;
-                }
+                block.lines.insert(name, n);
                 if block.fields.insert(name, value).is_some() {
                     problems.push((n, format!("`{name}` is given twice")));
                 }
@@ -126,7 +125,7 @@ fn finish(
         id,
         line,
         fields,
-        record_line,
+        lines,
     }) = block
     else {
         return;
@@ -168,7 +167,7 @@ fn finish(
         kind,
         retired,
         records,
-        record_line,
+        record_line: lines.get("record").copied().unwrap_or(line),
     };
     if found.insert(id, obligation).is_some() {
         problems.push((line, format!("A{id} is declared twice")));

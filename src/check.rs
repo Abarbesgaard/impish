@@ -254,7 +254,7 @@ fn check(root: &Path) -> anyhow::Result<Report> {
                 continue;
             }
         };
-        cited.extend(ids.values().filter(|o| !o.records.is_empty()).map(|o| {
+        cited.extend(ids.values().map(|o| {
             let at = format!("{readme_file}:{}", o.record_line);
             (at, o.records.clone())
         }));
