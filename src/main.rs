@@ -36,6 +36,11 @@ enum Command {
         /// this ref, and all of a primitive whose Contract or tests changed.
         #[arg(long, value_name = "REF", conflicts_with = "write")]
         since: Option<String>,
+        /// Run every test, not only the Contract's: name each outside test
+        /// that catches a mutant the Contract misses, and, mutating every
+        /// primitive, fail on each whose catches the Contract all makes.
+        #[arg(long)]
+        whole_suite: bool,
         /// Record in contract/coverage.json whether the primitive's mutate is
         /// met; `check` fails once what it rests on changes.
         #[arg(long)]
@@ -80,12 +85,14 @@ fn run() -> anyhow::Result<ExitCode> {
         Command::Mutate {
             primitive,
             since,
+            whole_suite,
             write,
             format,
         } => mutate::run(
             root(&cwd)?,
             primitive.as_deref(),
             since.as_deref(),
+            whole_suite,
             write,
             format == Format::Json,
         ),

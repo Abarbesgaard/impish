@@ -550,3 +550,106 @@ fn since_mutates_what_changed() {
         Some(2)
     );
 }
+
+/// calc with `*` → `+` in double declared unpromised, and tests outside the
+/// Contract: one the Contract duplicates, one that witnesses the survivor,
+/// and one that catches nothing covered.
+fn outside_tests() -> Project {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    p.write(
+        "contract/calc/mutants.md",
+        &declaring("unpromised", &[SURVIVOR]),
+    )
+    .write(
+        "tests/other.rs",
+        "#[test]\nfn adds_again() {\n    assert_eq!(calc::add(2, 3), 5);\n}\n\n\
+         #[test]\nfn doubles_three() {\n    assert_eq!(calc::double(3), 6);\n}\n\n\
+         #[test]\nfn negates() {\n    assert_eq!(calc::negate(2), -2);\n}\n",
+    );
+    p
+}
+
+#[impish::contract("mutate/A15")]
+fn whole_suite_names_witnesses() {
+    let p = outside_tests();
+
+    let out = p.mutate_with("calc", &["--whole-suite"]);
+
+    assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stdout
+            .contains("SURVIVED, declared unpromised, witnessed by other::doubles_three\n"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout
+            .lines()
+            .any(|l| l.contains("killed by") && l.contains("witnessed")),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        !out.stdout
+            .contains("Tests outside the Contract weren't run")
+    );
+    assert!(
+        out.stdout.contains(
+            "Duplicates outside the Contract need a run of every primitive, with no --since."
+        ),
+        "{}",
+        out.stdout
+    );
+
+    let out = p.mutate_with("calc", &["--whole-suite", "--format", "json"]);
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    let outside = |name: &str| {
+        doc["mutants"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["name"].as_str().unwrap().contains(name))
+            .unwrap_or_else(|| panic!("no mutant {name} in {doc}"))["outside"]
+            .clone()
+    };
+    assert_eq!(
+        outside("replace * with + in double"),
+        serde_json::json!(["other::doubles_three"])
+    );
+    assert_eq!(
+        outside("replace + with - in add"),
+        serde_json::json!(["other::adds_again"])
+    );
+}
+
+#[impish::contract("mutate/A16")]
+fn whole_suite_fails_on_duplicates() {
+    let p = outside_tests();
+
+    let out = p.mutate_args(&["--whole-suite"]);
+
+    assert_eq!(out.code, Some(1), "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stderr.contains(
+            "other::adds_again: every mutant it catches, the Contract catches too, \
+             so it duplicates the Contract"
+        ),
+        "{}",
+        out.stderr
+    );
+    assert!(!out.stderr.contains("doubles_three"), "{}", out.stderr);
+    assert!(!out.stderr.contains("other::negates"), "{}", out.stderr);
+    assert_eq!(out.stderr.matches(NOT_MET).count(), 1, "{}", out.stderr);
+
+    let out = p.mutate_args(&["--whole-suite", "--format", "json"]);
+    assert_eq!(out.code, Some(1), "{}", out.stderr);
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["met"], false);
+    assert_eq!(doc["primitives"]["calc"]["met"], true);
+    assert_eq!(doc["duplicates"], serde_json::json!(["other::adds_again"]));
+
+    p.commit();
+    let out = p.mutate_args(&["--whole-suite", "--since", "HEAD"]);
+    assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
+}
