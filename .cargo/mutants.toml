@@ -9,3 +9,7 @@ exclude_re = [
     "replace \\* with / in mutate$",
     "replace > with (==|>=) in Scratch::test$",
 ]
+
+# Run every test target against each mutant, not only up to the first that
+# fails, so mutants.out lists every test that catches it.
+additional_cargo_test_args = ["--no-fail-fast"]
