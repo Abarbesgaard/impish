@@ -87,6 +87,7 @@ merges itself (rule 27).
 | Dependency licences, sources and advisories | CI `deny`, `deny.toml`; nightly `audit.yml` |
 | Workflow security | CI `zizmor` |
 | No unused dependency | CI `lint`, `cargo machete` |
+| No copy-paste in scripts, workflows, Markdown or TOML | CI `lint`, jscpd (`.jscpd.json`) |
 | Every changed line is mutated, and a survivor fails | CI `mutants` |
 | Impish's own `mutate --since` holds each primitive a PR touches (rule 20) | CI `contract-mutants` |
 | No new near-duplicate functions | CI `similar`, `scripts/similar-code.sh` |

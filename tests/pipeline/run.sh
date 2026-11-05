@@ -11,6 +11,7 @@
 # BASH_UNDER_TEST (default bash) runs the scripts, so macOS can check them
 # with its bash 3.2: BASH_UNDER_TEST=/bin/bash tests/pipeline/run.sh
 # SHELLCHECK=0 skips shellcheck where it isn't installed.
+# JSCPD=0 skips the case that runs jscpd through npx, where npx isn't installed.
 set -uo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -95,6 +96,30 @@ workflows_cache_saves_from_main_only() {
   done
   [ -z "$bad_steps" ] || { bad "rust-cache saves off main at:" "$bad_steps"; return; }
   ok
+}
+
+workflows_lint_fails_on_copy_paste() {
+  local lint
+  lint=$(awk '/^  lint:/ { l = 1; next } l && /^  [a-z]/ { exit } l' "$root/.github/workflows/ci.yml")
+  case "$lint" in *"run: npx --yes jscpd@"*" ."*) ok ;; *) bad "Lint doesn't run jscpd" ;; esac
+}
+
+# The real jscpd, with impish's .jscpd.json, on a block copied between two
+# scripts. JSCPD=0 skips it where npx isn't installed.
+copy_paste() { (cd "$work/copy" && npx --yes jscpd@4.3.0 --config "$root/.jscpd.json" . 2>&1); }
+
+scripts_copy_paste_fails_between_two_scripts() {
+  [ "${JSCPD:-1}" = 0 ] && { ok; return; }
+  rm -rf "$work/copy"; mkdir -p "$work/copy/scripts"
+  local i out rc
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    echo "echo \"step $i\" | sed 's/a/b/g' | awk '{ print \$1, \$2 }'"
+  done > "$work/copy/scripts/a.sh"
+  out=$(copy_paste); rc=$?
+  expect_exit $rc 0 "$out" || return
+  cp "$work/copy/scripts/a.sh" "$work/copy/scripts/b.sh"
+  out=$(copy_paste); rc=$?
+  expect_exit $rc 1 "$out" && expect_has "$out" "scripts/b.sh" && ok
 }
 
 # shellcheck disable=SC2016 # the workflow's ${GITHUB_STEP_SUMMARY}, literally

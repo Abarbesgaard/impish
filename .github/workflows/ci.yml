@@ -13,7 +13,9 @@ name: CI
 #   Test ───────────────┴───────────────────────────┤
 #   Portability ────────────────────────────────────┘
 #
-# Format and Clippy: fmt, clippy, and the pipeline's own scripts (tests/pipeline).
+# Format and Clippy: fmt, clippy, unused dependencies, copy-paste outside Rust
+#                    (jscpd, .jscpd.json), and the pipeline's own scripts
+#                    (tests/pipeline).
 # Dependency policy: cargo-deny; licences, sources, advisories (deny.toml).
 # Workflow security: zizmor on these workflows.
 # Similar code:      no new near-duplicate functions (scripts/similar-code.sh).
@@ -69,6 +71,10 @@ jobs:
           tool: cargo-machete
       # A dependency nothing uses still costs build time and supply chain.
       - run: cargo machete
+      # similarity-rs judges the Rust; jscpd finds copy-paste in the scripts,
+      # workflows, Markdown and TOML, with .jscpd.json's formats and ignores.
+      - name: No copy-paste outside Rust
+        run: npx --yes jscpd@4.3.0 .
       # The gates' own scripts, against fakes of the slow tools: a gate that
       # can't fail is caught here, not on a PR that should have failed.
       - name: Pipeline scripts
