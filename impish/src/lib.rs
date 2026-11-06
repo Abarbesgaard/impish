@@ -121,7 +121,7 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::parse::Parser;
 use syn::punctuated::Punctuated;
-use syn::{Attribute, LitStr, Token};
+use syn::{Attribute, Expr, ExprLit, Lit, Token};
 
 /// Marks a contract test with the obligations it proves.
 ///
@@ -153,23 +153,65 @@ use syn::{Attribute, LitStr, Token};
 /// }
 /// ```
 ///
+/// A test whose every catch under `cargo impish mutate` another contract test
+/// makes too is reported as mutation-blind. To keep one on purpose, say why:
+///
+/// ```rust,ignore
+/// #[impish::contract("parse/A1", blind = "spells out the empty case")]
+/// ```
+///
 /// `#[ignore]` works as usual, but an ignored test proves nothing:
 /// `cargo impish check` reports its obligations as unproved.
 #[proc_macro_attribute]
 pub fn contract(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = proc_macro2::TokenStream::from(item);
-    let names = match Punctuated::<LitStr, Token![,]>::parse_terminated.parse(attr) {
-        Ok(names) if !names.is_empty() => names,
-        Ok(_) => {
-            return syn::Error::new(
-                Span::call_site(),
-                "name the obligations this test proves: #[impish::contract(\"<primitive>/A<n>\")]",
-            )
-            .into_compile_error()
-            .into();
-        }
+    let args = match Punctuated::<Expr, Token![,]>::parse_terminated.parse(attr) {
+        Ok(args) => args,
         Err(e) => return e.into_compile_error().into(),
     };
+    let mut names = Vec::new();
+    let mut wrong = Vec::new();
+    for arg in &args {
+        match arg {
+            Expr::Lit(ExprLit {
+                lit: Lit::Str(name),
+                ..
+            }) => names.push(name.clone()),
+            Expr::Assign(a) => {
+                let blind = matches!(&*a.left, Expr::Path(p) if p.path.is_ident("blind"));
+                if !blind
+                    || !matches!(
+                        &*a.right,
+                        Expr::Lit(ExprLit {
+                            lit: Lit::Str(_),
+                            ..
+                        })
+                    )
+                {
+                    wrong.push(syn::Error::new_spanned(
+                        a,
+                        "the one key is `blind = \"<reason>\"`: why a test with no unique kill is kept",
+                    ));
+                }
+            }
+            other => wrong.push(syn::Error::new_spanned(other, "expected string literal")),
+        }
+    }
+    if !wrong.is_empty() {
+        return wrong
+            .into_iter()
+            .map(syn::Error::into_compile_error)
+            .collect::<proc_macro2::TokenStream>()
+            .into();
+    }
+    if names.is_empty() {
+        return syn::Error::new(
+            Span::call_site(),
+            "name the obligations this test proves: #[impish::contract(\"<primitive>/A<n>\")]",
+        )
+        .into_compile_error()
+        .into();
+    }
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
     let mut readmes = Vec::new();
     let mut errors = Vec::new();

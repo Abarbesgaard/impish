@@ -114,6 +114,22 @@ must catch at least one mutant too.
 - **kind:** non-functional
 - **status:** active
 
+### A18 — The kill matrix has a row per test
+- **must:** print, after the obligation rows, each contract test of the primitive with its killed and unique counts, where unique counts the mutants no other contract test caught; in `--format json`, list them under `tests`
+- **kind:** functional
+- **status:** active
+
+### A19 — Tests with no unique kill are named
+- **must:** when every mutant was tried, print each contract test with kills but no unique kill under `Mutation-blind tests`, as a warning that doesn't change the exit code
+- **why:** a test whose every catch another test makes too costs CPU and proves nothing new (rule 26), but a contract test is also spec and may be kept on purpose, so a person decides (#59)
+- **kind:** functional
+- **status:** active
+
+### A20 — A reason keeps the warning quiet
+- **must:** accept `#[impish::contract("<primitive>/A<n>", blind = "<reason>")]`, and print that test with its reason under `Kept with no unique kill` in place of the warning
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate.rs::primitives
@@ -123,6 +139,7 @@ src/mutate/since.rs::touch_contract
 src/mutate/since.rs::touch
 src/mutate/since.rs::hunk
 src/mutate.rs::finish
+src/mutate/judge.rs::matrix
 src/mutate/record.rs::record
 src/mutate/suite.rs::tally
 src/mutate/pool.rs::each

@@ -15,7 +15,7 @@ is a compile error.
 - **status:** active
 
 ### A2 — It names an obligation
-- **must:** fail to compile, saying what it takes, when the attribute names no obligation or something other than string literals
+- **must:** fail to compile, saying what it takes, when the attribute names no obligation, or something other than string literals and one `blind = "<reason>"`
 - **kind:** functional
 - **status:** active
 

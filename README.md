@@ -187,6 +187,17 @@ calc: 10 mutants of 2 functions, 3 tests
   calc/A3          0       0
   unique: caught by no other obligation's tests.
   Tests outside the Contract weren't run; they may catch it too.
+
+  test              killed  unique
+  calc::adds             5       3
+  calc::adds_again       2       0
+  calc::subtracts        3       3
+  calc::compares         0       0
+  unique: caught by no other contract test.
+
+Mutation-blind tests: another contract test catches every mutant they catch.
+Remove them, or say why they stay with blind = "<reason>".
+  calc::adds_again
 calc/A3 is hollow: its tests catch none of the mutants
 calc::compares is blind: it catches none of the mutants
 src/lib.rs: replace sub -> i32 with 1 survived: catch it in a contract test, or declare it in contract/calc/mutants.md
@@ -206,6 +217,11 @@ The Contract is not met.
 - **blind:** a contract test that catches no mutant, even if its obligation's
   other tests do. It passes whatever the code does. Make it assert something
   the code could get wrong, or delete it.
+- **Mutation-blind tests:** contract tests with kills but no unique kill:
+  another test catches everything they do. A warning, not a failure, since a
+  contract test is also spec. Delete the test, or keep it with
+  `#[impish::contract("calc/A1", blind = "<reason>")]`, and the run lists it
+  under `Kept with no unique kill` with the reason instead.
 - **SURVIVED:** a bug no contract test caught, so the run fails. Here the
   only test is `sub(3, 2) == 1`, and `3 / 2` and a constant `1` give 1 too. A
   second case, say `sub(5, 2) == 3`, kills both. A mutant that times out
@@ -358,7 +374,7 @@ jobs:
 
 To read the results in a later step, add `--format json` and redirect stdout:
 `cargo impish mutate calc --format json > mutate.json`. The document has
-`met`, `mutants`, `obligations` (the kill matrix) and `problems`.
+`met`, `mutants`, `obligations` and `tests` (the kill matrix) and `problems`.
 
 impish's own [CI](https://github.com/Abarbesgaard/impish/blob/main/.github/workflows/ci.yml) and
 [kill matrix](https://github.com/Abarbesgaard/impish/blob/main/.github/workflows/kill-matrix.yml) go further: pinned actions, sharding and a per-test matrix.

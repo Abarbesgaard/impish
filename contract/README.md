@@ -101,7 +101,9 @@ Contract tests are black-box: they run the `cargo-impish` binary.
 cargo-mutants and credits each kill to the obligations whose tests caught it.
 It is strict: an obligation whose tests catch nothing is hollow and fails, a
 contract test that catches nothing is blind and fails, and so does any mutant
-no contract test catches, unless `mutants.md` declares it.
+no contract test catches, unless `mutants.md` declares it. A contract test
+whose every catch another test makes too is named as mutation-blind, a
+warning; `#[impish::contract("p/A1", blind = "<reason>")]` keeps it quietly.
 See `contract/mutate/`.
 
 ## Intent

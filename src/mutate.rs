@@ -237,8 +237,12 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
     let tests_file = format!("tests/contract/{primitive}.rs");
     let tests =
         fs::read_to_string(root.join(&tests_file)).with_context(|| format!("no {tests_file}"))?;
-    let tags: BTreeMap<String, Vec<String>> = tagged_tests(&tests)
-        .with_context(|| format!("{tests_file} isn't valid Rust"))?
+    let tagged = tagged_tests(&tests).with_context(|| format!("{tests_file} isn't valid Rust"))?;
+    let reasons: BTreeMap<String, Option<String>> = tagged
+        .iter()
+        .map(|t| (format!("{primitive}::{}", t.name), t.blind.clone()))
+        .collect();
+    let tags: BTreeMap<String, Vec<String>> = tagged
         .into_iter()
         .map(|t| (format!("{primitive}::{}", t.name), t.tags))
         .collect();
@@ -337,7 +341,10 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         outcomes.push(outcome);
     })?;
     let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
-    let tests: Vec<&str> = tags.keys().map(String::as_str).collect();
+    let tests: Vec<(&str, Option<&str>)> = reasons
+        .iter()
+        .map(|(name, reason)| (name.as_str(), reason.as_deref()))
+        .collect();
     let verdict = judge(&active, &tests, &tried, &declared, &declared_file, full);
     if write {
         record(
@@ -386,21 +393,7 @@ fn finish(
             "\n{} killed, {} survived, {} timed out, {} unviable",
             v.killed, v.survived, v.timed_out, v.unviable
         );
-        let width = v
-            .rows
-            .iter()
-            .map(|(id, ..)| id.len())
-            .max()
-            .unwrap_or(0)
-            .max(10);
-        println!("\n  {:width$}  killed  unique", "obligation");
-        for (id, killed, unique) in &v.rows {
-            println!("  {id:width$}  {killed:>6}  {unique:>6}");
-        }
-        println!("  unique: caught by no other obligation's tests.");
-        if !whole {
-            println!("  Tests outside the Contract weren't run; they may catch it too.");
-        }
+        print!("{}", judge::matrix(&v, whole));
     }
     if v.problems.is_empty() && !tried.is_empty() {
         println!("\nEvery mutant of {primitive} is caught or declared.");
