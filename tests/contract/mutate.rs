@@ -549,6 +549,17 @@ fn a_mutant_reach_cannot_place_lives_unnamed() {
         "{}",
         out.stdout
     );
+
+    // Called but unchecked: erased, yet not "none runs it", since something did.
+    let out = calc_owning("let _ = calc::big(5);", lib, &["big"]).mutate("calc");
+    assert!(
+        out.stdout.contains(
+            "  src/lib.rs: big  ERASED: no contract test notices big doing nothing\n    \
+             to clear: make a contract test fail on it\n"
+        ),
+        "{}",
+        out.stdout
+    );
 }
 
 #[impish::contract("mutate/A9")]
