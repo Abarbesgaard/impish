@@ -320,6 +320,7 @@ fn a_function_no_test_misses_is_reported_once() {
         out.stdout
     );
     assert!(!out.stdout.contains("in double "), "{}", out.stdout);
+    assert_eq!(out.stdout.matches("ERASED").count(), 1, "{}", out.stdout);
     assert!(
         out.stdout.contains(
             "\n5 killed, 3 lived, 0 unreached, 0 timed out, 2 erased, 0 declared, 0 unviable\n"
@@ -352,6 +353,41 @@ fn a_function_no_test_misses_is_reported_once() {
         Some("lived".into())
     );
     assert_eq!(doc["erased"], 2);
+}
+
+#[impish::contract("mutate/A26", "mutate/A27")]
+fn erasing_ignores_what_cannot_build_and_other_declarations() {
+    // `Some(Default::default())` doesn't build, as W has no default.
+    let lib =
+        "pub struct W(pub i32);\n\npub fn wrap(a: i32) -> Option<W> {\n    Some(W(a + 1))\n}\n";
+    let out = calc_owning("let _ = calc::wrap(1);", lib, &["wrap"]).mutate("calc");
+    assert!(
+        out.stdout.contains("  src/lib.rs: wrap  ERASED: "),
+        "{}",
+        out.stdout
+    );
+
+    // A declared mutant that isn't a body replacement doesn't save double.
+    let p = calc_crate(&format!("{ADDS}{DOUBLES_NOTHING}"));
+    p.write(
+        "contract/calc/mutants.md",
+        &declaring("unpromised", &[SURVIVOR]),
+    );
+    let out = p.mutate("calc");
+    assert!(
+        out.stdout.contains(", 1 erased, 1 declared, "),
+        "{}",
+        out.stdout
+    );
+    let out = p.mutate_with("calc", &["--format", "json"]);
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    let declared = doc["mutants"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["name"] == "src/lib.rs:6:7: replace * with + in double")
+        .map(|m| (m["outcome"].clone(), m["declared"].clone()));
+    assert_eq!(declared, Some(("erased".into(), "unpromised".into())));
 }
 
 #[impish::contract("mutate/A26")]
@@ -389,6 +425,7 @@ fn a_function_none_runs_is_erased_as_unreached() {
         "{}",
         out.stdout
     );
+    assert!(!out.stdout.contains("replace add"), "{}", out.stdout);
 }
 
 #[impish::contract("mutate/A24")]
