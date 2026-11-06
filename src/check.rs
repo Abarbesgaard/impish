@@ -108,9 +108,7 @@ fn coverage(report: &Report) -> Value {
                 .collect::<Vec<_>>()
         );
     }
-    let total = report.code.total;
-    if total > 0 {
-        let covered = total - report.code.outside.len();
+    if let Some((covered, total)) = report.code.share() {
         value["code"] =
             json!({"covered": covered, "total": total, "percent": percent(covered, total)});
     }
@@ -186,9 +184,7 @@ pub fn run(root: &Path, write: bool, json: bool, outside: bool) -> anyhow::Resul
             "The Contract holds: {} obligations across {} primitives.",
             report.obligations, report.primitives
         );
-        let total = report.code.total;
-        if total > 0 {
-            let covered = total - report.code.outside.len();
+        if let Some((covered, total)) = report.code.share() {
             let percent = percent(covered, total);
             println!("code: {covered} of {total} functions in the Contract ({percent}%)");
         }

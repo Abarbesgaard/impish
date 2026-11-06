@@ -41,6 +41,12 @@ pub struct Resolved {
 }
 
 impl Resolved {
+    /// How many of the crate's functions some primitive owns, of how many;
+    /// `None` when it has none.
+    pub fn share(&self) -> Option<(usize, usize)> {
+        (self.total > 0).then(|| (self.total - self.outside.len(), self.total))
+    }
+
     /// The files holding the code `primitive` owns.
     pub fn files_of(&self, primitive: &str) -> Vec<String> {
         let mut files: Vec<String> = self

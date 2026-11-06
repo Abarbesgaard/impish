@@ -1,8 +1,8 @@
 {
   "code": {
-    "covered": 80,
-    "percent": 74.1,
-    "total": 108
+    "covered": 81,
+    "percent": 74.3,
+    "total": 109
   },
   "kinds": {
     "functional": 55,
