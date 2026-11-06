@@ -66,13 +66,14 @@ enum Outcome {
 }
 
 /// Mutates the primitive, or every primitive that covers code; with a
-/// `since` ref, only the mutants on lines changed since its merge base; with
+/// `since` ref, only the mutants on lines changed since its merge base, and
+/// all of a primitive whose Contract or tests changed when its flag is set; with
 /// the `whole` suite, the tests outside the Contract too; up to `jobs`
 /// mutants at once.
 pub fn run(
     root: &Path,
     primitive: Option<&str>,
-    since: Option<&str>,
+    since: Option<(&str, bool)>,
     whole: bool,
     write: bool,
     json: bool,
@@ -82,7 +83,9 @@ pub fn run(
         Some(name) => vec![name.to_string()],
         None => primitives(root)?,
     };
-    let changes = since.map(|r| Changes::since(root, r)).transpose()?;
+    let changes = since
+        .map(|(r, contract)| Changes::since(root, r, contract))
+        .transpose()?;
     let mut met = true;
     let mut docs = Map::new();
     let mut outside = Outside::new();

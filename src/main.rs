@@ -43,6 +43,11 @@ enum Command {
         /// this ref, and all of a primitive whose Contract or tests changed.
         #[arg(long, value_name = "REF", conflicts_with = "write")]
         since: Option<String>,
+        /// With --since, mutate only the changed covered lines, even of a
+        /// primitive whose Contract or tests changed: quicker, but the lines
+        /// they didn't change aren't tried against the changed tests.
+        #[arg(long, requires = "since")]
+        only_lines: bool,
         /// Run every test, not only the Contract's: name each outside test
         /// that catches a mutant the Contract misses, and, mutating every
         /// primitive, fail on each whose catches the Contract all makes.
@@ -118,6 +123,7 @@ fn run() -> anyhow::Result<ExitCode> {
         Command::Mutate {
             primitive,
             since,
+            only_lines,
             whole_suite,
             jobs,
             write,
@@ -125,7 +131,7 @@ fn run() -> anyhow::Result<ExitCode> {
         } => mutate::run(
             root(&cwd)?,
             primitive.as_deref(),
-            since.as_deref(),
+            since.as_deref().map(|r| (r, !only_lines)),
             whole_suite,
             write,
             format == Format::Json,
