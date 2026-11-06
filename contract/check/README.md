@@ -78,8 +78,8 @@ exit code is 2 (cli/A3).
 - **kind:** functional
 - **status:** active
 
-### A15 — Retired obligations need no test
-- **must:** not require a test for a retired obligation, and fail, naming the tag, on a test that names one
+### A15 — Retired obligations and exceptions need no test
+- **must:** not require a test for a retired obligation or an exception, and fail, naming the tag, on a test that names one
 - **kind:** functional
 - **status:** active
 

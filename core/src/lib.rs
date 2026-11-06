@@ -2,14 +2,15 @@
 
 use std::collections::BTreeMap;
 
-const KINDS: [&str; 5] = [
+const KINDS: [&str; 6] = [
     "functional",
     "non-functional",
     "persisted-format",
     "ordering",
     "security",
+    "exception",
 ];
-const FIELDS: [&str; 5] = ["must", "why", "kind", "status", "record"];
+const FIELDS: [&str; 6] = ["must", "why", "kind", "status", "record", "target"];
 
 pub struct Obligation {
     pub kind: String,
@@ -17,6 +18,15 @@ pub struct Obligation {
     /// The decision records its `record:` field names, and that field's line.
     pub records: Vec<String>,
     pub record_line: usize,
+    /// What an exception excuses: `<file>::<function>` or `<file>`.
+    pub target: Option<String>,
+}
+
+impl Obligation {
+    /// Whether a test must prove it: it is active and not an exception.
+    pub fn needs_test(&self) -> bool {
+        !self.retired && self.kind != "exception"
+    }
 }
 
 struct Block<'a> {
@@ -153,6 +163,10 @@ fn finish(
         }
     };
     let kind = fields.get("kind").unwrap_or(&"").to_string();
+    let target = fields.get("target").map(|t| t.to_string());
+    if let Some(problem) = target_problem(id, &kind, &target) {
+        problems.push((line, problem));
+    }
     let records = fields
         .get("record")
         .map(|ids| {
@@ -168,8 +182,21 @@ fn finish(
         retired,
         records,
         record_line: lines.get("record").copied().unwrap_or(line),
+        target,
     };
     if found.insert(id, obligation).is_some() {
         problems.push((line, format!("A{id} is declared twice")));
+    }
+}
+
+/// What is wrong with obligation `id`'s `target`: only an exception, and
+/// every exception, takes one.
+fn target_problem(id: u32, kind: &str, target: &Option<String>) -> Option<String> {
+    match (kind == "exception", target) {
+        (true, None) => Some(format!("A{id} is an exception with no `target`")),
+        (false, Some(_)) => Some(format!(
+            "A{id} has a `target`, which only an exception takes"
+        )),
+        _ => None,
     }
 }

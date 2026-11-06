@@ -25,6 +25,7 @@ src/
   main.rs       parses the command line (clap) and finds the nearest contract/
   check.rs      `cargo impish check`: holds the Contract to its tests, writes coverage
   check/
+    exceptions.rs obligations that excuse a gap, held to their targets
     scope.rs    the ceilings in contract/scope.toml, counted
     stray.rs    contract tags and tests outside the primitives' test files
   conditions.rs `cargo impish conditions`: re-checks the decision records' conditions

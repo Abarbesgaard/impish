@@ -9,6 +9,7 @@ use anyhow::{Context, bail};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
+mod exceptions;
 mod scope;
 mod stray;
 
@@ -77,6 +78,8 @@ struct Report {
     covered: BTreeMap<String, (usize, Vec<String>)>,
     /// The ceilings in contract/scope.toml that could be counted.
     scope: Vec<scope::Ceiling>,
+    /// Each exception's tag and the target it excuses.
+    exceptions: BTreeMap<String, String>,
 }
 
 /// What `contract/coverage.json` holds.
@@ -105,6 +108,9 @@ fn coverage(report: &Report) -> Value {
                 .filter(|l| !covered.contains(l))
                 .collect::<Vec<_>>()
         );
+    }
+    if !report.exceptions.is_empty() {
+        value["exceptions"] = json!(report.exceptions);
     }
     if !report.scope.is_empty() {
         let scope: Map<String, Value> = report
@@ -221,6 +227,7 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         kinds: BTreeMap::new(),
         covered: BTreeMap::new(),
         scope: Vec::new(),
+        exceptions: BTreeMap::new(),
     };
     let mut cited = Vec::new();
     for name in &names {
@@ -278,7 +285,10 @@ fn check(root: &Path) -> anyhow::Result<Report> {
             let at = format!("{readme_file}:{}", o.record_line);
             (at, o.records.clone())
         }));
-        let active: Vec<_> = ids.values().filter(|o| !o.retired).collect();
+        let (excused, problems) = exceptions::excused(root, name, &ids);
+        report.exceptions.extend(excused);
+        report.problems.extend(problems);
+        let active: Vec<_> = ids.values().filter(|o| o.needs_test()).collect();
         for o in &active {
             *report.kinds.entry(o.kind.clone()).or_default() += 1;
         }
@@ -313,6 +323,12 @@ fn check(root: &Path) -> anyhow::Result<Report> {
                             test.name
                         ));
                     }
+                    Some(id) if ids.get(&id).is_some_and(|o| !o.needs_test()) => {
+                        report.problems.push(format!(
+                            "{name}::{} names `{tag}`, which is an exception",
+                            test.name
+                        ));
+                    }
                     Some(id) if ids.contains_key(&id) => {
                         if test.ignored {
                             let tests = ignored.entry(id).or_default();
@@ -328,7 +344,7 @@ fn check(root: &Path) -> anyhow::Result<Report> {
                 }
             }
         }
-        let active = ids.iter().filter(|(_, o)| !o.retired).map(|(id, _)| id);
+        let active = ids.iter().filter(|(_, o)| o.needs_test()).map(|(id, _)| id);
         for id in active.filter(|id| !proved.contains(*id)) {
             report.problems.push(match ignored.get(id) {
                 Some(tests) => format!("{name}/A{id} has no test (ignored: {})", tests.join(", ")),

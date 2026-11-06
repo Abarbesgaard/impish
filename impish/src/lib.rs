@@ -260,6 +260,9 @@ fn check(root: &std::path::Path, tag: &str) -> Result<String, String> {
     match declared.get(&id) {
         None => Err(format!("`{tag}`: {file} doesn't declare A{id}")),
         Some(o) if o.retired => Err(format!("`{tag}`: {file} declares A{id} retired")),
+        Some(o) if !o.needs_test() => Err(format!(
+            "`{tag}`: {file} declares A{id} an exception, which no test proves"
+        )),
         Some(_) => Ok(path.display().to_string()),
     }
 }
