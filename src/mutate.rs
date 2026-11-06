@@ -15,6 +15,7 @@ use serde_json::{Map, Value, json};
 mod judge;
 mod list;
 mod pool;
+mod reach;
 mod record;
 mod scratch;
 mod since;
@@ -59,7 +60,12 @@ enum Outcome {
         by: BTreeSet<String>,
         tests: BTreeSet<String>,
     },
-    Survived,
+    /// Uncaught, though these contract tests run its code.
+    Lived {
+        ran: BTreeSet<String>,
+    },
+    /// No contract test runs its code, so it was never built.
+    Unreached,
     /// The mutant doesn't build, so it proves nothing.
     Unviable,
     TimedOut,
@@ -307,40 +313,48 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         );
     }
 
+    let names: Vec<&str> = tags.keys().map(String::as_str).collect();
+    let reach = reach::reach(scratch, &owned, &names, scratches.len())?;
+    let ran: Vec<_> = mutants
+        .iter()
+        .map(|m| reach.as_ref().and_then(|r| r.ran(m)))
+        .collect();
+
     let mut outcomes = Vec::new();
     let mut caught = Vec::new();
     let mut outside = Outside::new();
     let work = |scratch: &Scratch, i: usize| {
+        // Outside tests may still reach it, and witness the missing promise.
+        if !whole && ran[i].as_ref().is_some_and(BTreeSet::is_empty) {
+            return Ok((Outcome::Unreached, BTreeSet::new()));
+        }
         scratch.try_mutant(&mutants[i], primitive, timeout, &tags, &active)
     };
     let mut i = 0;
-    pool::each(&scratches, mutants.len(), work, |(outcome, by_outside)| {
-        let mutant = &mutants[i];
-        i += 1;
-        let mut verdict = match &outcome {
-            Outcome::Killed { by, .. } => {
-                format!(
-                    "killed by {}",
-                    by.iter().cloned().collect::<Vec<_>>().join(", ")
-                )
+    pool::each(
+        &scratches,
+        mutants.len(),
+        work,
+        |(mut outcome, by_outside)| {
+            let mutant = &mutants[i];
+            if let (Outcome::Lived { ran: by }, Some(r)) = (&mut outcome, &ran[i]) {
+                if r.is_empty() {
+                    outcome = Outcome::Unreached;
+                } else {
+                    by.clone_from(r);
+                }
             }
-            Outcome::Survived => "SURVIVED".to_string(),
-            Outcome::Unviable => "unviable".to_string(),
-            Outcome::TimedOut => "timed out".to_string(),
-        };
-        if matches!(outcome, Outcome::Survived | Outcome::TimedOut)
-            && let Some(d) = declared.iter().find(|d| d.name == key(mutant))
-        {
-            verdict = format!("{verdict}, declared {}", d.kind);
-        }
-        if !json {
-            let witnessed = suite::witnessed(&outcome, &by_outside);
-            println!("  {}  {verdict}{witnessed}", mutant.name);
-        }
-        suite::tally(&mut outside, &outcome, &by_outside);
-        caught.push(by_outside);
-        outcomes.push(outcome);
-    })?;
+            i += 1;
+            if !json {
+                let witnessed = suite::witnessed(&outcome, &by_outside);
+                let line = judge::line(mutant, &outcome, &declared, &declared_file, &witnessed);
+                println!("{line}");
+            }
+            suite::tally(&mut outside, &outcome, &by_outside);
+            caught.push(by_outside);
+            outcomes.push(outcome);
+        },
+    )?;
     let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
     let tests: Vec<(&str, Option<&str>)> = reasons
         .iter()
@@ -363,15 +377,6 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
     Ok(Some(ran))
 }
 
-/// The mutant's name without line and column, as mutants.md declares it.
-fn key(m: &Mutant) -> String {
-    let rest = m.name.strip_prefix(m.file.as_str());
-    let rest = rest
-        .and_then(|r| r.split_once(": "))
-        .map_or(m.name.as_str(), |(_, r)| r);
-    format!("{}: {rest}", m.file)
-}
-
 /// Reports one primitive's verdict as text, unless the run reports JSON.
 fn finish(
     primitive: &str,
@@ -391,8 +396,8 @@ fn finish(
     }
     if !tried.is_empty() {
         println!(
-            "\n{} killed, {} survived, {} timed out, {} unviable",
-            v.killed, v.survived, v.timed_out, v.unviable
+            "\n{} killed, {} lived, {} unreached, {} timed out, {} declared, {} unviable",
+            v.killed, v.lived, v.unreached, v.timed_out, v.declared, v.unviable
         );
         print!("{}", judge::matrix(&v, whole));
     }
