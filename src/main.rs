@@ -1,4 +1,5 @@
 mod check;
+mod code;
 mod conditions;
 mod contract;
 mod decisions;
@@ -27,6 +28,9 @@ enum Command {
         write: bool,
         #[arg(long, value_enum, default_value_t = Format::Text)]
         format: Format,
+        /// List every function in a src/ directory that no covers line claims.
+        #[arg(long)]
+        outside: bool,
     },
     /// Break the code a primitive covers and credit each kill to the
     /// obligations whose tests caught it; fail on an obligation that catches
@@ -102,7 +106,11 @@ fn run() -> anyhow::Result<ExitCode> {
     }
     let cwd = std::env::current_dir()?;
     match Cli::parse_from(args).command {
-        Command::Check { write, format } => check::run(root(&cwd)?, write, format == Format::Json),
+        Command::Check {
+            write,
+            format,
+            outside,
+        } => check::run(root(&cwd)?, write, format == Format::Json, outside),
         Command::Conditions => conditions::run(root(&cwd)?),
         Command::Regen { primitive, out } => {
             regen::run(root(&cwd)?, &primitive, out.map(|o| cwd.join(o)).as_deref())

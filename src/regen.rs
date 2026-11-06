@@ -12,7 +12,8 @@ use std::process::ExitCode;
 
 use anyhow::{Context, bail};
 
-use crate::contract::{covers, escapes};
+use crate::code;
+use crate::contract::escapes;
 
 /// Lists what a pack's run wrote, so the next run deletes only that.
 const MARKER: &str = ".impish-pack";
@@ -23,7 +24,7 @@ const FORMAT: &str = include_str!("../contract/README.md");
 pub fn run(root: &Path, primitive: &str, out: Option<&Path>) -> anyhow::Result<ExitCode> {
     let readme_file = format!("contract/{primitive}/README.md");
     let named = !primitive.is_empty() && !primitive.contains(['/', '\\']) && !escapes(primitive);
-    let Some(readme) = named
+    let Some(_) = named
         .then(|| fs::read_to_string(root.join(&readme_file)).ok())
         .flatten()
     else {
@@ -33,7 +34,7 @@ pub fn run(root: &Path, primitive: &str, out: Option<&Path>) -> anyhow::Result<E
         || root.join("target/impish/regen").join(primitive),
         Path::to_path_buf,
     );
-    let pack = pack(root, primitive, &readme);
+    let pack = pack(root, primitive);
     clear(&out)?;
     for (rel, text) in &pack {
         let path = out.join(rel);
@@ -51,7 +52,7 @@ pub fn run(root: &Path, primitive: &str, out: Option<&Path>) -> anyhow::Result<E
 }
 
 /// The pack's files, by path inside it.
-fn pack(root: &Path, primitive: &str, readme: &str) -> BTreeMap<String, String> {
+fn pack(root: &Path, primitive: &str) -> BTreeMap<String, String> {
     let mut pack = BTreeMap::from([
         ("PROMPT.md".to_string(), prompt(primitive)),
         ("FORMAT.md".to_string(), FORMAT.to_string()),
@@ -69,16 +70,15 @@ fn pack(root: &Path, primitive: &str, readme: &str) -> BTreeMap<String, String> 
             pack.insert(rel, text);
         }
     }
-    let mut covered: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    for (file, func) in covers(readme).into_iter().flatten() {
-        if !escapes(file) {
-            covered.entry(file).or_default().push(func);
-        }
+    let code = code::resolve(root, &code::readmes(root));
+    let mut covered: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for f in code.owned.get(primitive).into_iter().flatten() {
+        covered.entry(&f.file).or_default().push(f.first);
     }
-    for (file, names) in covered {
+    for (file, firsts) in covered {
         let stubs = fs::read_to_string(root.join(file))
             .ok()
-            .and_then(|src| stubs::stubs(&src, &names));
+            .and_then(|src| stubs::stubs(&src, &firsts));
         if let Some(stubs) = stubs {
             pack.insert(format!("stubs/{file}"), stubs);
         }

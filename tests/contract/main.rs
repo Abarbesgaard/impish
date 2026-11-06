@@ -3,6 +3,7 @@
 mod attribute;
 mod check;
 mod cli;
+mod covers;
 mod decisions;
 mod exceptions;
 mod harness;

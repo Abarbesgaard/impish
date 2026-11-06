@@ -1,11 +1,16 @@
 {
+  "code": {
+    "covered": 80,
+    "percent": 74.1,
+    "total": 108
+  },
   "kinds": {
-    "functional": 52,
+    "functional": 55,
     "non-functional": 2,
-    "persisted-format": 10,
+    "persisted-format": 11,
     "security": 5
   },
-  "obligations": 69,
+  "obligations": 73,
   "primitives": {
     "attribute": {
       "obligations": 6,
@@ -14,13 +19,17 @@
       ]
     },
     "check": {
-      "obligations": 25,
+      "obligations": 24,
       "surface": [
         "cli check"
       ]
     },
     "cli": {
       "obligations": 3,
+      "surface": []
+    },
+    "covers": {
+      "obligations": 5,
       "surface": []
     },
     "decisions": {
