@@ -371,5 +371,22 @@ jobs:
             echo "::error::the binary answered '$got', expected 'cargo impish $version'"
             exit 1
           fi
-          cargo publish --workspace --locked
+          # A rerun skips the crates an earlier attempt already published.
+          publish() {
+            local out
+            if ! out=$(cargo publish --locked -p "$1" 2>&1); then
+              echo "$out"
+              grep -q "already exists" <<< "$out" || exit 1
+            fi
+          }
+          publish impish-core
+          publish impish
+          # cargo-impish's tests use impish from crates.io. Packaging it turns
+          # the path to impish-core into a crates.io one, which clashes with
+          # the impish-core an older impish locks, so move to the new one.
+          old=$(awk '$0 == "name = \"impish\"" { getline v; getline s; if (s ~ /registry/) { gsub(/version = |"/, "", v); print v } }' Cargo.lock)
+          if [ "$old" != "$version" ]; then
+            cargo update -p "impish@$old" --precise "$version"
+          fi
+          publish cargo-impish
           gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
