@@ -36,4 +36,5 @@ declared in `mutants.md`, the one place mutants are declared.
 ```covers
 src/check/exceptions.rs::excused
 core/src/lib.rs::needs_test
+core/src/lib.rs::target_problem
 ```

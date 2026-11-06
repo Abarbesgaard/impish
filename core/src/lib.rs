@@ -164,13 +164,8 @@ fn finish(
     };
     let kind = fields.get("kind").unwrap_or(&"").to_string();
     let target = fields.get("target").map(|t| t.to_string());
-    match (kind == "exception", &target) {
-        (true, None) => problems.push((line, format!("A{id} is an exception with no `target`"))),
-        (false, Some(_)) => problems.push((
-            line,
-            format!("A{id} has a `target`, which only an exception takes"),
-        )),
-        _ => {}
+    if let Some(problem) = target_problem(id, &kind, &target) {
+        problems.push((line, problem));
     }
     let records = fields
         .get("record")
@@ -191,5 +186,17 @@ fn finish(
     };
     if found.insert(id, obligation).is_some() {
         problems.push((line, format!("A{id} is declared twice")));
+    }
+}
+
+/// What is wrong with obligation `id`'s `target`: only an exception, and
+/// every exception, takes one.
+fn target_problem(id: u32, kind: &str, target: &Option<String>) -> Option<String> {
+    match (kind == "exception", target) {
+        (true, None) => Some(format!("A{id} is an exception with no `target`")),
+        (false, Some(_)) => Some(format!(
+            "A{id} has a `target`, which only an exception takes"
+        )),
+        _ => None,
     }
 }
