@@ -4,6 +4,7 @@ mod attribute;
 mod check;
 mod cli;
 mod decisions;
+mod exceptions;
 mod harness;
 mod mutate;
 mod regen;

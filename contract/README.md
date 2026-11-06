@@ -22,9 +22,15 @@ and never renumbered:
 - **status:** active
 ```
 
-`kind` is one of functional, non-functional, persisted-format, ordering or
-security; `status` is active or retired. A retired obligation keeps its number
-and needs no test. Every line under `## Obligations` must belong to a block, and
+`kind` is one of functional, non-functional, persisted-format, ordering,
+security or exception; `status` is active or retired. A retired obligation
+keeps its number and needs no test.
+
+An `exception` excuses a deliberate gap, such as code proven by an integration
+test against a real service, and names it with a `- **target:**
+<file>::<function>` or `<file>` field. It needs no test, a test may not name
+it, it is counted apart from the obligations and listed under `exceptions` in
+`coverage.json`, and `check` fails once its target is gone. Every line under `## Obligations` must belong to a block, and
 an obligation outside it fails, so a promise can't silently fall out of the
 Contract. Fenced code blocks are skipped.
 

@@ -248,8 +248,10 @@ when it matches no mutant (`… matches no mutant`), or when its block has no
 An obligation is a `### A<n> — <title>` block under `## Obligations` with
 `must`, `kind` and `status` fields and an optional `why`. Numbers are never
 reused; an obligation that no longer holds is marked `retired` and needs no
-test. `kind` is one of functional, non-functional, persisted-format, ordering
-or security.
+test. `kind` is one of functional, non-functional, persisted-format, ordering,
+security or exception. An exception excuses a deliberate gap: it names a
+`target` (`<file>::<function>` or `<file>`), needs no test, is counted apart,
+and fails `check` once its target is gone.
 
 A README may also list the code it is about in a `covers` block of
 `<file>::<function>` lines, and the surface its tests drive in a `surface`

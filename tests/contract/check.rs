@@ -104,7 +104,7 @@ fn a_malformed_obligation_list_fails_with_file_and_line() {
         format!("{f}:6: malformed obligation heading `### A1`"),
         format!("{f}:7: malformed obligation heading `### Ax - Adds`"),
         format!(
-            "{f}:8: A2 has kind `fast`, not one of functional, non-functional, persisted-format, ordering, security"
+            "{f}:8: A2 has kind `fast`, not one of functional, non-functional, persisted-format, ordering, security, exception"
         ),
         format!("{f}:8: A2 has status `done`, not active or retired"),
         format!("{f}:10: `must` is given twice"),

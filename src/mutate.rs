@@ -190,7 +190,7 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         obligations(&readme, &readme_file).map_err(|problems| anyhow!(problems.join("\n")))?;
     let active: Vec<String> = ids
         .iter()
-        .filter(|(_, o)| !o.retired)
+        .filter(|(_, o)| o.needs_test())
         .map(|(id, _)| format!("{primitive}/A{id}"))
         .collect();
     let targets = covers(&readme)
