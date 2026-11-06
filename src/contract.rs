@@ -6,12 +6,10 @@ use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
 use syn::{Attribute, ItemFn, LitStr, Token};
 
-/// The `(file, function)` pairs in a README's covers blocks, or the line that
-/// isn't `<file>::<function>`. A README without the block covers nothing.
-pub fn covers(readme: &str) -> Vec<Result<(&str, &str), &str>> {
-    block(readme, "covers")
-        .map(|line| line.split_once("::").ok_or(line))
-        .collect()
+/// The lines of a README's covers blocks. A README without the block covers
+/// nothing.
+pub fn covers(readme: &str) -> Vec<&str> {
+    block(readme, "covers").collect()
 }
 
 /// Whether a covers file could name something outside the crate.
@@ -23,16 +21,14 @@ pub fn escapes(file: &str) -> bool {
 }
 
 /// A stable hash of what a primitive's mutate result rests on: its README,
-/// its mutants.md, its contract tests and the files its covers block names.
-/// `read` returns a file's text, or "" when there is none.
-pub fn fingerprint(primitive: &str, readme: &str, read: impl Fn(&str) -> String) -> String {
-    let mut files: std::collections::BTreeSet<String> = covers(readme)
-        .into_iter()
-        .flatten()
-        .map(|(file, _)| file)
-        .filter(|file| !escapes(file))
-        .map(String::from)
-        .collect();
+/// its mutants.md, its contract tests and `covered`, the files holding the
+/// code it owns. `read` returns a file's text, or "" when there is none.
+pub fn fingerprint(
+    primitive: &str,
+    covered: impl IntoIterator<Item = String>,
+    read: impl Fn(&str) -> String,
+) -> String {
+    let mut files: std::collections::BTreeSet<String> = covered.into_iter().collect();
     files.extend([
         format!("contract/{primitive}/README.md"),
         format!("contract/{primitive}/mutants.md"),

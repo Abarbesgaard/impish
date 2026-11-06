@@ -92,8 +92,8 @@ fn exceptions_are_published_apart() {
     let p = project(&extra, "");
     let out = p.check();
     assert_eq!(
-        out.stdout,
-        "The Contract holds: 1 obligations across 1 primitives.\n"
+        out.stdout.lines().next(),
+        Some("The Contract holds: 1 obligations across 1 primitives.")
     );
     assert_eq!(p.run(&["check", "--write"]).code, Some(0));
     let json: serde_json::Value = serde_json::from_str(&p.read("contract/coverage.json")).unwrap();

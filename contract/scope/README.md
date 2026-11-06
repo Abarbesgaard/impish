@@ -31,5 +31,4 @@ covenant's scope ceilings.
 src/check/scope.rs::scope
 src/check/scope.rs::ceiling
 src/check/scope.rs::functions
-src/check/scope.rs::files
 ```

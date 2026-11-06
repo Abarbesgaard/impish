@@ -113,6 +113,7 @@ cargo impish mutate add  # every obligation's tests catch a bug in the code
 | Command | What it does |
 | --- | --- |
 | `cargo impish check` | Holds the Contract to its tests. Reports every problem on stderr and exits 1, or says how many obligations held and exits 0. Reads only. Also holds the ceilings in `contract/scope.toml`, and prints how close each count is. See [contract/README.md](https://github.com/Abarbesgaard/impish/blob/main/contract/README.md#scope-ceilings). |
+| `cargo impish check --outside` | Also lists the functions in `src/` that no covers line claims. Never fails on them; `check` always prints the covered share. |
 | `cargo impish check --write` | Also writes `contract/coverage.json`, the published coverage. Once it exists, `check` fails when it's out of date. |
 | `cargo impish mutate <primitive>` | Breaks the code the primitive's covers block names with [cargo-mutants](https://mutants.rs), on a copy of the project, and credits each kill to the obligations whose tests caught it. Fails on an obligation whose tests catch nothing. Needs `cargo install cargo-mutants`. |
 | `cargo impish mutate` | With no primitive, mutates every primitive that covers code, and fails if any one's Contract isn't met. |
@@ -148,7 +149,7 @@ The Contract is not met.
 | `<primitive>/A<n> has no test` | Write a test that proves it, or retire the obligation if it's no longer a promise. |
 | `contract/coverage.json is out of date` | Run `cargo impish check --write` and commit the result. |
 | `…: the mutate result for <primitive> is stale` | Its Contract, tests or covered code changed since `mutate --write`. Run `cargo impish mutate <primitive> --write` and commit the result. |
-| `…: covers <file>::<fn>, which doesn't exist` | The function was renamed or moved. Update the covers block. |
+| `…: covers <line>, which doesn't exist` | The file, function, type or method was renamed or moved. Update the covers block. |
 | `<test>: every mutant it catches, the Contract catches too, so it duplicates the Contract` | From `mutate --whole-suite`. Delete the outside test, or make it catch something the Contract doesn't. |
 | `<file>:<line>: a test outside tests/contract/<primitive>.rs` | A test in `main.rs`, a helper, or a file with no `contract/<name>/README.md`. Give it a Contract, or move it out of `tests/contract/`. |
 
@@ -254,7 +255,8 @@ security or exception. An exception excuses a deliberate gap: it names a
 and fails `check` once its target is gone.
 
 A README may also list the code it is about in a `covers` block of
-`<file>::<function>` lines, and the surface its tests drive in a `surface`
+`<file>`, `<dir>/...`, `<file>::<item>` or `<file>::<Type>::<method>` lines
+(the most specific line owns a function), and the surface its tests drive in a `surface`
 block of `<kind> <name>` lines. To check surface lines against the real
 surface, put a command that prints it in `impish.toml`:
 

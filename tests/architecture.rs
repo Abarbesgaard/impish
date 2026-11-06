@@ -62,6 +62,8 @@ fn binary_layers_depend_inwards() {
         .defined_by("src/mutate**")
         .layer("regen")
         .defined_by("src/regen**")
+        .layer("code")
+        .defined_by("src/code.rs")
         .layer("contract")
         .defined_by("src/contract.rs")
         .where_layer("contract")
@@ -70,12 +72,14 @@ fn binary_layers_depend_inwards() {
         .may_only_depend_on_layers(&[])
         .where_layer("conditions")
         .may_only_depend_on_layers(&["decisions"])
-        .where_layer("check")
-        .may_only_depend_on_layers(&["contract", "decisions"])
-        .where_layer("mutate")
+        .where_layer("code")
         .may_only_depend_on_layers(&["contract"])
+        .where_layer("check")
+        .may_only_depend_on_layers(&["code", "contract", "decisions"])
+        .where_layer("mutate")
+        .may_only_depend_on_layers(&["code", "contract"])
         .where_layer("regen")
-        .may_only_depend_on_layers(&["contract"]);
+        .may_only_depend_on_layers(&["code", "contract"]);
 
     assert_passes!(rule);
 }

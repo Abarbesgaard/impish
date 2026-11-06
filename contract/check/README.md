@@ -50,8 +50,9 @@ exit code is 2 (cli/A3).
 
 ### A9 — Covers name real functions
 - **must:** fail, naming it, on a covers line that isn't `<file>::<function>` or names a function the file doesn't define
+- **why:** replaced by covers/A1, which also takes files, trees and types (#57)
 - **kind:** functional
-- **status:** active
+- **status:** retired
 
 ### A10 — Ignored tests prove nothing
 - **must:** not count a test marked `#[ignore]` as proof, and name the ignored tests when an obligation is left without one
@@ -151,6 +152,7 @@ src/contract.rs::surface
 src/check.rs::real_surface
 src/check.rs::coverage
 src/check.rs::mutate_results
+src/code.rs::Resolved::files_of
 src/main.rs::root
 ```
 

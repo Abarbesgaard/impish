@@ -13,7 +13,8 @@ mod exceptions;
 mod scope;
 mod stray;
 
-use crate::contract::{covers, escapes, fingerprint, intent, surface, tagged_tests};
+use crate::code::{self, Resolved};
+use crate::contract::{fingerprint, intent, surface, tagged_tests};
 use crate::decisions;
 use impish_core::obligations;
 
@@ -80,6 +81,8 @@ struct Report {
     scope: Vec<scope::Ceiling>,
     /// Each exception's tag and the target it excuses.
     exceptions: BTreeMap<String, String>,
+    /// What the covers lines resolve to.
+    code: Resolved,
 }
 
 /// What `contract/coverage.json` holds.
@@ -96,11 +99,7 @@ fn coverage(report: &Report) -> Value {
     });
     if let Some(real) = &report.real {
         let covered: BTreeSet<&String> = report.covered.values().flat_map(|(_, s)| s).collect();
-        let percent = if real.is_empty() {
-            0.0
-        } else {
-            (covered.len() as f64 * 1000.0 / real.len() as f64).round() / 10.0
-        };
+        let percent = percent(covered.len(), real.len());
         value["surface"] =
             json!({"covered": covered.len(), "total": real.len(), "percent": percent});
         value["uncovered"] = json!(
@@ -108,6 +107,10 @@ fn coverage(report: &Report) -> Value {
                 .filter(|l| !covered.contains(l))
                 .collect::<Vec<_>>()
         );
+    }
+    if let Some((covered, total)) = report.code.share() {
+        value["code"] =
+            json!({"covered": covered, "total": total, "percent": percent(covered, total)});
     }
     if !report.exceptions.is_empty() {
         value["exceptions"] = json!(report.exceptions);
@@ -128,11 +131,27 @@ fn coverage(report: &Report) -> Value {
     value
 }
 
-pub fn run(root: &Path, write: bool, json: bool) -> anyhow::Result<ExitCode> {
+/// `part` of `whole` as a percentage with one decimal; 0 of nothing is 0.
+fn percent(part: usize, whole: usize) -> f64 {
+    if whole == 0 {
+        0.0
+    } else {
+        (part as f64 * 1000.0 / whole as f64).round() / 10.0
+    }
+}
+
+pub fn run(root: &Path, write: bool, json: bool, outside: bool) -> anyhow::Result<ExitCode> {
     let mut report = check(root)?;
     let path = root.join("contract/coverage.json");
     let mut published = coverage(&report);
-    mutate_results(root, &mut published, &mut report.problems);
+    mutate_results(root, &report.code, &mut published, &mut report.problems);
+    let unclaimed: Vec<String> = report
+        .code
+        .outside
+        .iter()
+        .filter(|_| outside)
+        .map(|f| format!("{}::{}", f.file, f.name))
+        .collect();
     let text = serde_json::to_string_pretty(&published)? + "\n";
     if write {
         fs::write(&path, text).context("write contract/coverage.json")?;
@@ -142,7 +161,7 @@ pub fn run(root: &Path, write: bool, json: bool) -> anyhow::Result<ExitCode> {
         );
     }
     if json {
-        let doc = json!({
+        let mut doc = json!({
             "version": 1,
             "met": report.problems.is_empty(),
             "obligations": report.obligations,
@@ -150,6 +169,9 @@ pub fn run(root: &Path, write: bool, json: bool) -> anyhow::Result<ExitCode> {
             "problems": report.problems,
             "coverage": published,
         });
+        if outside {
+            doc["outside"] = json!(unclaimed);
+        }
         println!("{doc}");
         return Ok(if report.problems.is_empty() {
             ExitCode::SUCCESS
@@ -162,9 +184,21 @@ pub fn run(root: &Path, write: bool, json: bool) -> anyhow::Result<ExitCode> {
             "The Contract holds: {} obligations across {} primitives.",
             report.obligations, report.primitives
         );
+        if let Some((covered, total)) = report.code.share() {
+            let percent = percent(covered, total);
+            println!("code: {covered} of {total} functions in the Contract ({percent}%)");
+        }
         for c in &report.scope {
             println!("{}: {} of at most {}", c.name, c.count, c.ceiling);
         }
+    }
+    if !unclaimed.is_empty() {
+        println!("Outside the Contract:");
+        for f in &unclaimed {
+            println!("  {f}");
+        }
+    }
+    if report.problems.is_empty() {
         return Ok(ExitCode::SUCCESS);
     }
     for problem in &report.problems {
@@ -176,7 +210,7 @@ pub fn run(root: &Path, write: bool, json: bool) -> anyhow::Result<ExitCode> {
 
 /// Carries each primitive's mutate result, recorded by `mutate --write`, into
 /// the published coverage, and names the ones whose fingerprint has changed.
-fn mutate_results(root: &Path, published: &mut Value, problems: &mut Vec<String>) {
+fn mutate_results(root: &Path, code: &Resolved, published: &mut Value, problems: &mut Vec<String>) {
     let Some(recorded) = fs::read_to_string(root.join("contract/coverage.json"))
         .ok()
         .and_then(|text| serde_json::from_str::<Value>(&text).ok())
@@ -191,9 +225,7 @@ fn mutate_results(root: &Path, published: &mut Value, problems: &mut Vec<String>
         if result.is_null() {
             continue;
         }
-        let readme =
-            fs::read_to_string(root.join(format!("contract/{name}/README.md"))).unwrap_or_default();
-        let now = fingerprint(name, &readme, |file| {
+        let now = fingerprint(name, code.files_of(name), |file| {
             fs::read_to_string(root.join(file)).unwrap_or_default()
         });
         if result["fingerprint"] != now.as_str() {
@@ -228,6 +260,7 @@ fn check(root: &Path) -> anyhow::Result<Report> {
         covered: BTreeMap::new(),
         scope: Vec::new(),
         exceptions: BTreeMap::new(),
+        code: code::resolve(root, &code::readmes(root)),
     };
     let mut cited = Vec::new();
     for name in &names {
@@ -245,20 +278,8 @@ fn check(root: &Path) -> anyhow::Result<Report> {
             continue;
         };
         let readme_file = format!("contract/{name}/README.md");
-        for target in covers(&readme) {
-            report.problems.push(match target {
-                Ok((file, func)) if escapes(file) => {
-                    format!("{readme_file}: covers `{file}::{func}`, which is outside the crate")
-                }
-                Ok((file, func)) if defines(root, file, func) => continue,
-                Ok((file, func)) => {
-                    format!("{readme_file}: covers `{file}::{func}`, which doesn't exist")
-                }
-                Err(line) => {
-                    format!("{readme_file}: covers line `{line}` is not <file>::<function>")
-                }
-            });
-        }
+        let covers = report.code.problems.get(name).cloned().unwrap_or_default();
+        report.problems.extend(covers);
         let mut lines = Vec::new();
         for line in surface(&readme) {
             report.problems.push(match line {

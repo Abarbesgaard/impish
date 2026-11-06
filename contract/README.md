@@ -49,12 +49,22 @@ names no obligation and fails, and a test marked
 `#[ignore]` proves nothing. The attribute belongs only in
 `tests/contract/<primitive>.rs`.
 
-A README may list the code its obligations are about in a covers block of
-`<file>::<function>` lines; each must exist:
+A README may list the code its obligations are about in covers blocks. A
+line names a file (`src/lib.rs`), a tree (`src/check/...`), a function or
+type (`src/lib.rs::parse`, `src/lib.rs::Parser`) or a method
+(`src/lib.rs::Parser::next`), and must name at least one function. Each
+function goes to the primitive that names it most specifically, a method
+before a function or type, before a file, before a tree; a tie goes to the
+primitive whose name sorts first. `mutate` breaks exactly the functions a
+primitive owns, nested functions included. `check` prints how many of the
+functions in `src/` some primitive owns, records it under `code` in
+`coverage.json`, and with `--outside` lists the rest; `#[cfg(test)]` code and
+`@generated` files are left out. See `contract/covers/`.
 
 ````markdown
 ```covers
 src/check.rs::run
+src/check/...
 ```
 ````
 

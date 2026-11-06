@@ -238,30 +238,6 @@ fn with_covers(lines: &str) -> Project {
     p
 }
 
-#[impish::contract("check/A9")]
-fn covers_naming_defined_functions_hold() {
-    let out = with_covers("src/calc.rs::add\n\nsrc/calc.rs::parse\n").check();
-    assert_eq!(out.code, Some(0), "{}", out.stderr);
-}
-
-#[impish::contract("check/A9")]
-fn covers_naming_missing_functions_fail() {
-    let out =
-        with_covers("src/calc.rs::sub\nsrc/calc.rs::add_\nsrc/gone.rs::add\nsrc/calc.rs\n").check();
-    assert_eq!(out.code, Some(1));
-    let file = "contract/calc/README.md";
-    assert_eq!(
-        out.stderr,
-        format!(
-            "{file}: covers `src/calc.rs::sub`, which doesn't exist\n\
-             {file}: covers `src/calc.rs::add_`, which doesn't exist\n\
-             {file}: covers `src/gone.rs::add`, which doesn't exist\n\
-             {file}: covers line `src/calc.rs` is not <file>::<function>\n\
-             {NOT_MET}\n"
-        )
-    );
-}
-
 #[impish::contract("check/A10")]
 fn ignored_tests_prove_nothing() {
     let tests = [
@@ -643,5 +619,10 @@ fn a_stale_mutate_result_fails() {
     assert_eq!(p.check().stderr, stale);
     std::fs::remove_file(p.path().join("contract/calc/mutants.md")).unwrap();
     p.write("src/other.rs", "pub fn other() {}\n");
-    assert_eq!(p.check().code, Some(0), "an uncovered file made it stale");
+    let out = p.check();
+    assert!(
+        !out.stderr.contains("stale"),
+        "an uncovered file made it stale: {}",
+        out.stderr
+    );
 }

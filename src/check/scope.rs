@@ -6,6 +6,8 @@ use std::fs;
 use std::path::Path;
 
 use globset::GlobBuilder;
+
+use crate::code::files;
 use syn::visit::{self, Visit};
 use toml::{Table, Value};
 
@@ -173,28 +175,4 @@ fn functions(src: &str) -> usize {
         count.visit_file(&file);
     }
     count.0
-}
-
-/// Every file under `root`, relative and with `/` between its parts, leaving
-/// out `target/` and hidden directories such as `.git/`.
-fn files(root: &Path) -> Vec<String> {
-    fn walk(dir: &Path, prefix: &str, out: &mut Vec<String>) {
-        for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let rel = format!("{prefix}{name}");
-            match entry.file_type() {
-                Ok(t) if t.is_dir() => {
-                    if !name.starts_with('.') && rel != "target" {
-                        walk(&entry.path(), &format!("{rel}/"), out);
-                    }
-                }
-                Ok(_) => out.push(rel),
-                Err(_) => {}
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(root, "", &mut out);
-    out.sort();
-    out
 }

@@ -27,21 +27,16 @@ use scratch::Scratch;
 use since::Changes;
 use suite::Outside;
 
-use crate::contract::{Declared, covers, declarations, tagged_tests};
+use crate::code;
+use crate::contract::{Declared, declarations, tagged_tests};
 use impish_core::obligations;
 
 #[derive(Deserialize)]
 struct Mutant {
     name: String,
     file: String,
-    function: Option<Function>,
     replacement: String,
     span: Span,
-}
-
-#[derive(Deserialize)]
-struct Function {
-    function_name: String,
 }
 
 #[derive(Deserialize)]
@@ -193,11 +188,12 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         .filter(|(_, o)| o.needs_test())
         .map(|(id, _)| format!("{primitive}/A{id}"))
         .collect();
-    let targets = covers(&readme)
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|line| anyhow!("{readme_file}: covers line `{line}` is not <file>::<function>"))?;
-    if targets.is_empty() {
+    let code = code::resolve(root, &code::readmes(root));
+    if let Some(problems) = code.problems.get(primitive).filter(|p| !p.is_empty()) {
+        bail!(problems.join("\n"));
+    }
+    let owned = code.owned.get(primitive).cloned().unwrap_or_default();
+    if owned.is_empty() {
         if every {
             if !json {
                 println!("{primitive}: covers no code, so there is nothing to mutate\n");
@@ -227,7 +223,7 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
             ..Verdict::default()
         };
         if write {
-            record(root, primitive, &readme, false)?;
+            record(root, primitive, code.files_of(primitive), false)?;
         }
         return Ok(Some(finish(
             primitive,
@@ -247,7 +243,7 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         .map(|t| (format!("{primitive}::{}", t.name), t.tags))
         .collect();
 
-    let mut mutants = list(root, &targets)?;
+    let mut mutants = list(root, &owned)?;
     if mutants.is_empty() {
         bail!("cargo-mutants finds no mutants in the code {readme_file} covers");
     }
@@ -301,7 +297,7 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         println!(
             "{primitive}: {} mutants of {} functions, {} tests",
             mutants.len(),
-            targets.len(),
+            owned.len(),
             tags.len()
         );
     }
@@ -344,7 +340,12 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
     let tests: Vec<&str> = tags.keys().map(String::as_str).collect();
     let verdict = judge(&active, &tests, &tried, &declared, &declared_file, full);
     if write {
-        record(root, primitive, &readme, verdict.problems.is_empty())?;
+        record(
+            root,
+            primitive,
+            code.files_of(primitive),
+            verdict.problems.is_empty(),
+        )?;
     }
     let mut ran = finish(primitive, &tried, &declared, verdict, whole, json);
     if whole {

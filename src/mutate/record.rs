@@ -10,7 +10,12 @@ use crate::contract::fingerprint;
 
 /// Records in contract/coverage.json whether the primitive's mutate is met,
 /// with the fingerprint `check` holds it to.
-pub(super) fn record(root: &Path, primitive: &str, readme: &str, met: bool) -> anyhow::Result<()> {
+pub(super) fn record(
+    root: &Path,
+    primitive: &str,
+    covered: Vec<String>,
+    met: bool,
+) -> anyhow::Result<()> {
     let path = root.join("contract/coverage.json");
     let mut doc: Value = if path.exists() {
         let text = fs::read_to_string(&path).context("read contract/coverage.json")?;
@@ -18,7 +23,7 @@ pub(super) fn record(root: &Path, primitive: &str, readme: &str, met: bool) -> a
     } else {
         json!({})
     };
-    let fingerprint = fingerprint(primitive, readme, |file| {
+    let fingerprint = fingerprint(primitive, covered, |file| {
         fs::read_to_string(root.join(file)).unwrap_or_default()
     });
     doc["primitives"][primitive]["mutate"] = json!({"met": met, "fingerprint": fingerprint});

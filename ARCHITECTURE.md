@@ -45,13 +45,17 @@ src/
     record.rs   the mutate result `--write` leaves in coverage.json
     pool.rs     tries mutants on several scratch copies at once, for `-j`
     list.rs     the mutants cargo-mutants makes of the covered code
+  code.rs       every function in the crate, and which primitive's covers line
+                owns it: the most specific, then the first by name
   contract.rs   reads covers and surface blocks, mutants.md declarations, and
                 #[impish::contract] tags with syn
 ```
 
-`main` calls the commands; `check` and `mutate` both build on `contract`, never
-on each other; `check` and `conditions` both build on `decisions`, which knows
-neither; `regen` builds on `contract` alone; `contract` does no I/O. Only the commands read or write files,
+`main` calls the commands; `check`, `mutate` and `regen` build on `code`, which
+resolves covers lines and builds on `contract` alone; `check` and `mutate` both
+build on `contract`, never on each other; `check` and `conditions` both build on `decisions`, which knows
+neither; `contract` does no I/O. Only the commands, and `code`, which reads
+source files, read or write files,
 run processes or print, and only `check` (`impish.toml`, `scope.toml`) and `decisions`
 (`decisions.toml`, `Cargo.lock`) read TOML. `main` prints
 one thing: the error that stopped a run, which exits 2 (undecided), not 1

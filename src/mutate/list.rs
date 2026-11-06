@@ -7,10 +7,12 @@ use std::process::Command;
 use anyhow::{Context, bail};
 
 use super::Mutant;
+use crate::code::Function;
 
-/// The mutants cargo-mutants makes of the covered functions, in its order.
-pub(super) fn list(root: &Path, targets: &[(&str, &str)]) -> anyhow::Result<Vec<Mutant>> {
-    let files: BTreeSet<&str> = targets.iter().map(|(file, _)| *file).collect();
+/// The mutants cargo-mutants makes of the functions the primitive owns, in
+/// its order: those inside one of them, nested functions included.
+pub(super) fn list(root: &Path, owned: &[Function]) -> anyhow::Result<Vec<Mutant>> {
+    let files: BTreeSet<&str> = owned.iter().map(|f| f.file.as_str()).collect();
     let mut cmd = Command::new(cargo());
     cmd.args(["mutants", "--list", "--json", "--workspace"])
         .current_dir(root);
@@ -31,9 +33,8 @@ pub(super) fn list(root: &Path, targets: &[(&str, &str)]) -> anyhow::Result<Vec<
     Ok(all
         .into_iter()
         .filter(|m| {
-            let name = m.function.as_ref().map_or("", |f| f.function_name.as_str());
-            targets.iter().any(|(file, func)| {
-                m.file == *file && (name == *func || name.ends_with(&format!("::{func}")))
+            owned.iter().any(|f| {
+                m.file == f.file && f.first <= m.span.start.line && m.span.end.line <= f.last
             })
         })
         .collect())
