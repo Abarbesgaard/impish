@@ -80,13 +80,15 @@ pub(super) fn ready(
     declared_file: &str,
 ) -> String {
     let mut out = String::new();
-    while let Some(Some(outcome)) = outcomes.get(*next) {
-        let m = &mutants[*next];
+    // Bounded by the outcomes, so a wrong `next` repeats lines instead of hanging.
+    for (i, slot) in outcomes.iter().enumerate().skip(*next) {
+        let Some(outcome) = slot else { break };
+        let m = &mutants[i];
         let line = match of(m).filter(|f| erased.contains(f)) {
             Some(f) if seen.insert(f.clone()) => line(m, mutants, outcomes, declared_file),
             Some(_) => String::new(),
             None => {
-                let witnessed = witnessed(outcome, &caught[*next]);
+                let witnessed = witnessed(outcome, &caught[i]);
                 judge::line(m, outcome, declared, declared_file, &witnessed)
             }
         };
@@ -94,7 +96,7 @@ pub(super) fn ready(
             out.push_str(&line);
             out.push('\n');
         }
-        *next += 1;
+        *next = i + 1;
     }
     out
 }

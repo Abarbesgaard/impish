@@ -321,6 +321,13 @@ fn a_function_no_test_misses_is_reported_once() {
     );
     assert!(!out.stdout.contains("in double "), "{}", out.stdout);
     assert_eq!(out.stdout.matches("ERASED").count(), 1, "{}", out.stdout);
+    let lines: Vec<_> = out
+        .stdout
+        .lines()
+        .filter(|l| l.starts_with("  src/"))
+        .collect();
+    let unique: std::collections::BTreeSet<_> = lines.iter().collect();
+    assert_eq!(lines.len(), unique.len(), "{}", out.stdout);
     assert!(
         out.stdout.contains(
             "\n5 killed, 3 lived, 0 unreached, 0 timed out, 2 erased, 0 declared, 0 unviable\n"
