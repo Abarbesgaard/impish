@@ -106,8 +106,9 @@ merges itself (rule 27).
 | Workflow security | CI `zizmor` |
 | No unused dependency | CI `lint`, `cargo machete` |
 | No copy-paste in scripts, workflows, Markdown or TOML | CI `lint`, jscpd (`.jscpd.json`) |
-| Every changed line is mutated, and a survivor fails | CI `mutants` |
-| Impish's own `mutate --since` holds each primitive a PR touches (rule 20) | CI `contract-mutants` |
+| Every changed line is mutated, in four shards, and a survivor fails | CI `mutants` |
+| Impish's own `mutate --since --only-lines` holds each covered line a PR changes, one job per primitive (rule 20) | CI `contract-mutants` |
+| After a merge, plain `mutate --since` re-mutates all of each primitive whose Contract or tests changed | `contract-mutants.yml` |
 | No new near-duplicate functions | CI `similar`, `scripts/similar-code.sh` |
 | Existing near-duplicates become issues, one per cluster | nightly `similar-backlog.yml`, `scripts/similar-backlog.sh` |
 | A change to what ships (`scripts/shipped.sh`) bumps the version | CI `version` ([D6](contract/decisions.toml)) |

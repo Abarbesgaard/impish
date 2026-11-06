@@ -605,6 +605,20 @@ fn since_mutates_what_changed() {
     );
 }
 
+#[impish::contract("mutate/A21")]
+fn only_lines_skips_a_changed_contract() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    p.commit();
+    let tests = p.read("tests/contract/calc.rs");
+    p.write("tests/contract/calc.rs", &format!("{tests}\n"));
+    let out = p.mutate_with("calc", &["--since", "HEAD", "--only-lines"]);
+    assert_eq!(
+        (out.code, out.stdout.as_str()),
+        (Some(0), "calc: no covered line changed since HEAD\n\n")
+    );
+    assert_eq!(p.mutate_with("calc", &["--only-lines"]).code, Some(2));
+}
+
 /// calc with `*` → `+` in double declared unpromised, and tests outside the
 /// Contract: one the Contract duplicates, one that witnesses the survivor,
 /// and one that catches nothing covered.

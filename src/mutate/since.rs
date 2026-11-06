@@ -9,13 +9,15 @@ use anyhow::{Context, bail};
 
 pub(super) struct Changes {
     pub(super) reference: String,
+    /// Whether a changed Contract or contract test mutates all of a primitive.
+    contract: bool,
     files: BTreeSet<String>,
     /// Per file: the changed line ranges, first and last, 1-based.
     lines: BTreeMap<String, Vec<(usize, usize)>>,
 }
 
 impl Changes {
-    pub(super) fn since(root: &Path, reference: &str) -> anyhow::Result<Self> {
+    pub(super) fn since(root: &Path, reference: &str, contract: bool) -> anyhow::Result<Self> {
         let base = git(root, &["merge-base", reference, "HEAD"])?;
         let diff = git(
             root,
@@ -30,6 +32,7 @@ impl Changes {
         )?;
         let mut changes = Changes {
             reference: reference.to_string(),
+            contract,
             files: BTreeSet::new(),
             lines: BTreeMap::new(),
         };
@@ -55,8 +58,12 @@ impl Changes {
         Ok(changes)
     }
 
-    /// Whether the primitive's Contract or its contract tests changed.
+    /// Whether the primitive's Contract or its contract tests changed, and
+    /// that calls for mutating all of it.
     pub(super) fn touch_contract(&self, primitive: &str) -> bool {
+        if !self.contract {
+            return false;
+        }
         let dir = format!("contract/{primitive}/");
         let tests = format!("tests/contract/{primitive}.rs");
         self.files

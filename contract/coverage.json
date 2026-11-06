@@ -5,12 +5,12 @@
     "total": 111
   },
   "kinds": {
-    "functional": 58,
+    "functional": 59,
     "non-functional": 2,
     "persisted-format": 11,
     "security": 5
   },
-  "obligations": 76,
+  "obligations": 77,
   "primitives": {
     "attribute": {
       "obligations": 6,
@@ -43,7 +43,7 @@
       "surface": []
     },
     "mutate": {
-      "obligations": 20,
+      "obligations": 21,
       "surface": [
         "cli mutate"
       ]
