@@ -374,7 +374,7 @@ jobs:
           # A rerun skips the crates an earlier attempt already published.
           publish() {
             local out
-            if ! out=$(cargo publish --locked -p "$1" 2>&1); then
+            if ! out=$(cargo publish --locked -p "$@" 2>&1); then
               echo "$out"
               grep -q "already exists" <<< "$out" || exit 1
             fi
@@ -388,5 +388,6 @@ jobs:
           if [ "$old" != "$version" ]; then
             cargo update -p "impish@$old" --precise "$version"
           fi
-          publish cargo-impish
+          # That update is the one change to the checkout.
+          publish cargo-impish --allow-dirty
           gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
