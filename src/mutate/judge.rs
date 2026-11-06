@@ -5,14 +5,17 @@ use std::fmt::Write;
 
 use serde_json::{Value, json};
 
-use super::{Mutant, Outcome, key};
+use super::{Mutant, Outcome};
 use crate::contract::Declared;
 
 #[derive(Default)]
 pub(super) struct Verdict {
     pub(super) killed: usize,
-    pub(super) survived: usize,
+    pub(super) lived: usize,
+    pub(super) unreached: usize,
     pub(super) timed_out: usize,
+    /// Uncaught mutants that mutants.md declares; not in the counts above.
+    pub(super) declared: usize,
     pub(super) unviable: usize,
     /// Per active obligation: its id, killed and unique counts.
     pub(super) rows: Vec<(String, usize, usize)>,
@@ -35,12 +38,15 @@ pub(super) fn judge(
     full: bool,
 ) -> Verdict {
     let mut v = Verdict::default();
-    for (_, outcome) in tried {
+    for (m, outcome) in tried {
+        let is_declared = || declared.iter().any(|d| d.name == key(m));
         *match outcome {
             Outcome::Killed { .. } => &mut v.killed,
-            Outcome::Survived => &mut v.survived,
-            Outcome::TimedOut => &mut v.timed_out,
             Outcome::Unviable => &mut v.unviable,
+            _ if is_declared() => &mut v.declared,
+            Outcome::Lived { .. } => &mut v.lived,
+            Outcome::Unreached => &mut v.unreached,
+            Outcome::TimedOut => &mut v.timed_out,
         } += 1;
     }
     for id in active {
@@ -82,10 +88,8 @@ pub(super) fn judge(
         v.tests.push((test.to_string(), killed, unique));
     }
     for (mutant, outcome) in tried {
-        let what = match outcome {
-            Outcome::Survived => "survived",
-            Outcome::TimedOut => "timed out",
-            _ => continue,
+        let Some(what) = uncaught(outcome) else {
+            continue;
         };
         let name = key(mutant);
         if !declared.iter().any(|d| d.name == name) {
@@ -116,6 +120,61 @@ pub(super) fn judge(
         }
     }
     v
+}
+
+/// What an uncaught mutant is: `lived`, `unreached` or `timed out`.
+pub(super) fn uncaught(outcome: &Outcome) -> Option<&'static str> {
+    match outcome {
+        Outcome::Lived { .. } => Some("lived"),
+        Outcome::Unreached => Some("unreached"),
+        Outcome::TimedOut => Some("timed out"),
+        _ => None,
+    }
+}
+
+/// The run's line for one mutant, and for one no test catches, how to clear
+/// it, unless mutants.md declares it.
+pub(super) fn line(
+    m: &Mutant,
+    outcome: &Outcome,
+    declared: &[Declared],
+    declared_file: &str,
+    witnessed: &str,
+) -> String {
+    let what = match outcome {
+        Outcome::Killed { by, .. } => {
+            let by: Vec<&str> = by.iter().map(String::as_str).collect();
+            return format!("  {}  killed by {}", m.name, by.join(", "));
+        }
+        Outcome::Unviable => return format!("  {}  unviable", m.name),
+        Outcome::Lived { ran } if !ran.is_empty() => {
+            let ran: Vec<&str> = ran.iter().map(String::as_str).collect();
+            format!("LIVED, run by {}", ran.join(", "))
+        }
+        other => uncaught(other).unwrap_or_default().to_uppercase(),
+    };
+    let what = what.replace("TIMED OUT", "timed out");
+    if let Some(d) = declared.iter().find(|d| d.name == key(m)) {
+        return format!("  {}  {what}, declared {}{witnessed}", m.name, d.kind);
+    }
+    let clear = match outcome {
+        Outcome::Lived { ran } if !ran.is_empty() => {
+            let ran: Vec<&str> = ran.iter().map(String::as_str).collect();
+            format!(
+                "make {} fail on it, or write the obligation it breaks and a test for it",
+                ran.join(" or ")
+            )
+        }
+        Outcome::Unreached => format!(
+            "no contract test runs this code: write the promise that needs it, \
+             delete the code, or declare it unpromised in {declared_file}"
+        ),
+        Outcome::TimedOut => {
+            format!("make the code finish under its tests, or declare it in {declared_file}")
+        }
+        _ => "make a contract test fail on it".to_string(),
+    };
+    format!("  {}  {what}{witnessed}\n    to clear: {clear}", m.name)
 }
 
 /// The kill matrix, per obligation and per test, and the tests with no
@@ -172,23 +231,24 @@ pub(super) fn json(
     let mutants: Vec<Value> = tried
         .iter()
         .map(|(m, outcome)| {
-            let (name, by, tests) = match outcome {
-                Outcome::Killed { by, tests } => ("killed", by.clone(), tests.clone()),
-                Outcome::Survived => ("survived", BTreeSet::new(), BTreeSet::new()),
-                Outcome::TimedOut => ("timed out", BTreeSet::new(), BTreeSet::new()),
-                Outcome::Unviable => ("unviable", BTreeSet::new(), BTreeSet::new()),
+            let none = BTreeSet::new();
+            let (name, by, tests, ran) = match outcome {
+                Outcome::Killed { by, tests } => ("killed", by, tests, &none),
+                Outcome::Lived { ran } => ("lived", &none, &none, ran),
+                Outcome::Unreached => ("unreached", &none, &none, &none),
+                Outcome::TimedOut => ("timed out", &none, &none, &none),
+                Outcome::Unviable => ("unviable", &none, &none, &none),
             };
             let declared = declared
                 .iter()
-                .find(|d| {
-                    matches!(outcome, Outcome::Survived | Outcome::TimedOut) && d.name == key(m)
-                })
+                .find(|d| uncaught(outcome).is_some() && d.name == key(m))
                 .map(|d| d.kind);
             json!({
                 "name": m.name,
                 "outcome": name,
                 "caught_by": by,
                 "tests": tests,
+                "ran_by": ran,
                 "declared": declared,
             })
         })
@@ -212,11 +272,22 @@ pub(super) fn json(
         "met": v.problems.is_empty(),
         "mutants": mutants,
         "killed": v.killed,
-        "survived": v.survived,
+        "lived": v.lived,
+        "unreached": v.unreached,
         "timed_out": v.timed_out,
+        "declared": v.declared,
         "unviable": v.unviable,
         "obligations": rows,
         "tests": tests,
         "problems": v.problems,
     })
+}
+
+/// The mutant's name without line and column, as mutants.md declares it.
+pub(super) fn key(m: &Mutant) -> String {
+    let rest = m.name.strip_prefix(m.file.as_str());
+    let rest = rest
+        .and_then(|r| r.split_once(": "))
+        .map_or(m.name.as_str(), |(_, r)| r);
+    format!("{}: {rest}", m.file)
 }

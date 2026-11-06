@@ -15,7 +15,7 @@ pub(super) type Outside = BTreeMap<String, bool>;
 pub(super) fn tally(outside: &mut Outside, outcome: &Outcome, caught: &BTreeSet<String>) {
     for test in caught {
         let witnessed = outside.entry(test.clone()).or_default();
-        *witnessed = *witnessed || matches!(outcome, Outcome::Survived);
+        *witnessed = *witnessed || matches!(outcome, Outcome::Lived { .. } | Outcome::Unreached);
     }
 }
 
@@ -45,7 +45,7 @@ pub(super) fn duplicate(test: &str) -> String {
 
 /// How the run's line for a mutant names the outside tests that witness it.
 pub(super) fn witnessed(outcome: &Outcome, caught: &BTreeSet<String>) -> String {
-    if !matches!(outcome, Outcome::Survived) || caught.is_empty() {
+    if !matches!(outcome, Outcome::Lived { .. } | Outcome::Unreached) || caught.is_empty() {
         return String::new();
     }
     let tests: Vec<&str> = caught.iter().map(String::as_str).collect();

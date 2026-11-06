@@ -177,10 +177,12 @@ in `contract/<primitive>/mutants.md` with a reason
 $ cargo impish mutate calc
 calc: 10 mutants of 2 functions, 3 tests
   src/lib.rs:2:7: replace + with - in add  killed by calc/A1
-  src/lib.rs:6:5: replace sub -> i32 with 1  SURVIVED
-  src/lib.rs:6:7: replace - with / in sub  SURVIVED
+  src/lib.rs:6:5: replace sub -> i32 with 1  LIVED, run by calc::subtracts
+    to clear: make calc::subtracts fail on it, or write the obligation it breaks and a test for it
+  src/lib.rs:6:7: replace - with / in sub  LIVED, run by calc::subtracts
+    to clear: make calc::subtracts fail on it, or write the obligation it breaks and a test for it
   …
-8 killed, 2 survived, 0 timed out, 0 unviable
+8 killed, 2 lived, 0 unreached, 0 timed out, 0 declared, 0 unviable
 
   obligation  killed  unique
   calc/A1          5       5
@@ -201,8 +203,8 @@ Remove them, or say why they stay with blind = "<reason>".
   calc::adds_again
 calc/A3 is hollow: its tests catch none of the mutants
 calc::compares is blind: it catches none of the mutants
-src/lib.rs: replace sub -> i32 with 1 survived: catch it in a contract test, or declare it in contract/calc/mutants.md
-src/lib.rs: replace - with / in sub survived: catch it in a contract test, or declare it in contract/calc/mutants.md
+src/lib.rs: replace sub -> i32 with 1 lived: catch it in a contract test, or declare it in contract/calc/mutants.md
+src/lib.rs: replace - with / in sub lived: catch it in a contract test, or declare it in contract/calc/mutants.md
 The Contract is not met.
 ```
 
@@ -223,10 +225,17 @@ The Contract is not met.
   contract test is also spec. Delete the test, or keep it with
   `#[impish::contract("calc/A1", blind = "<reason>")]`, and the run lists it
   under `Kept with no unique kill` with the reason instead.
-- **SURVIVED:** a bug no contract test caught, so the run fails. Here the
-  only test is `sub(3, 2) == 1`, and `3 / 2` and a constant `1` give 1 too. A
-  second case, say `sub(5, 2) == 3`, kills both. A mutant that times out
-  fails the same way: a hang is not a catch.
+- **LIVED:** a bug the contract tests ran past without failing, so the run
+  fails. It names the tests that ran the mutated code. Here the only test is
+  `sub(3, 2) == 1`, and `3 / 2` and a constant `1` give 1 too. A second case,
+  say `sub(5, 2) == 3`, kills both.
+- **UNREACHED:** a bug in code no contract test runs, so the run fails too.
+  No test can be strengthened to catch it: write the promise that needs the
+  code, delete the code, or declare it. impish finds this by running each
+  contract test once against a probed copy, and doesn't build the mutant
+  unless given `--whole-suite`.
+- **timed out:** a hang is not a catch, so it fails the same way.
+- **to clear:** each failing mutant says what would clear it.
 
 The run passes only when every obligation and every contract test catches
 something and every mutant is caught or declared: `Every mutant of calc is
@@ -256,7 +265,7 @@ src/lib.rs: replace - with / in sub
 A line is the mutant's name as `mutate` prints it, without the line and
 column, so it still matches after the code above it moves. It covers every
 mutant with that name. Declared mutants still run, and the run prints them as
-`SURVIVED, declared unpromised`. A declaration fails the run when a contract
+`LIVED, run by calc::subtracts, declared unpromised`. A declaration fails the run when a contract
 test catches its mutant (`… is declared equivalent, but calc/A1 catches it`),
 when it matches no mutant (`… matches no mutant`), or when its block has no
 `##` heading above it.
@@ -375,7 +384,10 @@ jobs:
 
 To read the results in a later step, add `--format json` and redirect stdout:
 `cargo impish mutate calc --format json > mutate.json`. The document has
-`met`, `mutants`, `obligations` and `tests` (the kill matrix) and `problems`.
+`met`, `mutants` (each with its `outcome`: `killed`, `lived`, `unreached`,
+`timed out` or `unviable`, and the tests that caught it or ran it), the counts
+(`killed`, `lived`, `unreached`, `timed_out`, `declared`, `unviable`),
+`obligations` and `tests` (the kill matrix) and `problems`.
 
 impish's own [CI](https://github.com/Abarbesgaard/impish/blob/main/.github/workflows/ci.yml) and
 [kill matrix](https://github.com/Abarbesgaard/impish/blob/main/.github/workflows/kill-matrix.yml) go further: pinned actions, sharding and a per-test matrix.

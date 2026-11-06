@@ -13,23 +13,22 @@ use anyhow::{Context, anyhow, bail};
 
 use super::{Mutant, Outcome, Position, Span, cargo};
 
+/// The byte offset of a 1-based line and 1-based column in characters.
+pub(super) fn offset(src: &str, line: usize, column: usize) -> Option<usize> {
+    let start: usize = src.split_inclusive('\n').take(line - 1).map(str::len).sum();
+    let text = src[start..].split_inclusive('\n').next().unwrap_or("");
+    let column = text
+        .char_indices()
+        .map(|(i, _)| i)
+        .chain([text.len()])
+        .nth(column - 1)?;
+    Some(start + column)
+}
+
 /// `src` with the span replaced.
 fn mutated(src: &str, span: &Span, replacement: &str) -> anyhow::Result<String> {
-    let offset = |p: &Position| -> Option<usize> {
-        let start: usize = src
-            .split_inclusive('\n')
-            .take(p.line - 1)
-            .map(str::len)
-            .sum();
-        let line = src[start..].split_inclusive('\n').next().unwrap_or("");
-        let column = line
-            .char_indices()
-            .map(|(i, _)| i)
-            .chain([line.len()])
-            .nth(p.column - 1)?;
-        Some(start + column)
-    };
-    let (Some(start), Some(end)) = (offset(&span.start), offset(&span.end)) else {
+    let at = |p: &Position| offset(src, p.line, p.column);
+    let (Some(start), Some(end)) = (at(&span.start), at(&span.end)) else {
         bail!("a mutant's span is outside its file");
     };
     Ok(format!("{}{replacement}{}", &src[..start], &src[end..]))
@@ -40,7 +39,7 @@ fn mutated(src: &str, span: &Span, replacement: &str) -> anyhow::Result<String> 
 /// `impish-mutate-1`, …) under `CARGO_TARGET_DIR` or the project's `target/`,
 /// so each mutant only rebuilds what it changed.
 pub(super) struct Scratch {
-    dir: PathBuf,
+    pub(super) dir: PathBuf,
     target: PathBuf,
     /// Whether the tests outside the Contract run too.
     whole: bool,
@@ -211,7 +210,9 @@ impl Scratch {
                     // Caught only by tests that name no active obligation,
                     // the Contract still lets the mutant through.
                     if by.is_empty() {
-                        Outcome::Survived
+                        Outcome::Lived {
+                            ran: BTreeSet::new(),
+                        }
                     } else {
                         Outcome::Killed { by, tests: failed }
                     }

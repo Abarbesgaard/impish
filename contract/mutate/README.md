@@ -18,7 +18,7 @@ must catch at least one mutant too.
 ## Obligations
 
 ### A1 — Kills are credited to obligations
-- **must:** print each mutant with the active obligations whose tests caught it, or `SURVIVED` when none did, then each active obligation's killed and unique counts
+- **must:** print each mutant with the active obligations whose tests caught it, or, when none did, what kind of uncaught mutant it is (A22), then each active obligation's killed and unique counts
 - **kind:** functional
 - **status:** active
 
@@ -136,6 +136,28 @@ must catch at least one mutant too.
 - **kind:** functional
 - **status:** active
 
+### A22 — Unreached is told from lived
+- **must:** report each mutant no contract test catches as `UNREACHED` when no contract test of the primitive, run alone on the unmutated code, enters the innermost block holding it; `timed out` when the tests ran past the timeout; and `LIVED` otherwise, naming the contract tests that ran it; in `--format json`, give its outcome as `unreached`, `timed out` or `lived`, and the tests that ran it under `ran_by`
+- **why:** a lived mutant needs a stronger test, an unreached one a promise that needs the code, or no code; one `SURVIVED` for both hides which (#58)
+- **kind:** functional
+- **status:** active
+
+### A23 — Every uncaught mutant says how to clear it
+- **must:** print under each uncaught mutant mutants.md doesn't declare one line starting `to clear:`: for a lived mutant, the tests to make fail on it, or the obligation to write; for an unreached one, write the promise that needs the code, delete the code, or declare it unpromised
+- **kind:** functional
+- **status:** active
+
+### A24 — The summary counts each kind
+- **must:** print one summary line with the counts of killed, lived, unreached, timed out, declared and unviable mutants, where declared counts the uncaught mutants mutants.md declares and the other counts leave them out; in `--format json`, give the same counts
+- **kind:** functional
+- **status:** active
+
+### A25 — Unreached mutants aren't built
+- **must:** without `--whole-suite`, skip building and testing an unreached mutant, and still report it unreached; with it, try it, since a test outside the Contract may reach it
+- **why:** no contract test can catch a mutant none of them runs, so building it only costs time
+- **kind:** non-functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate.rs::primitives
@@ -146,6 +168,20 @@ src/mutate/since.rs::touch
 src/mutate/since.rs::hunk
 src/mutate.rs::finish
 src/mutate/judge.rs::matrix
+src/mutate/judge.rs::uncaught
+src/mutate/judge.rs::line
+src/mutate/reach.rs::ran
+src/mutate/reach.rs::reach
+src/mutate/reach.rs::run
+src/mutate/reach.rs::probe
+src/mutate/reach.rs::visit_block
+src/mutate/reach.rs::visit_signature
+src/mutate/reach.rs::visit_item_fn
+src/mutate/reach.rs::visit_impl_item_fn
+src/mutate/reach.rs::visit_item_const
+src/mutate/reach.rs::visit_item_static
+src/mutate/reach.rs::visit_expr_const
+src/mutate/scratch.rs::offset
 src/mutate/record.rs::record
 src/mutate/suite.rs::tally
 src/mutate/pool.rs::each
@@ -157,7 +193,7 @@ src/mutate/suite.rs::annotate
 src/contract.rs::fingerprint
 src/mutate/judge.rs::judge
 src/mutate/judge.rs::json
-src/mutate.rs::key
+src/mutate/judge.rs::key
 src/contract.rs::declarations
 src/mutate/scratch.rs::mutated
 ```
