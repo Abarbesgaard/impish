@@ -131,10 +131,9 @@ pub fn tagged_tests(src: &str) -> syn::Result<Vec<TaggedTest>> {
                 });
                 for arg in args {
                     match &arg {
-                        Expr::Assign(a) if matches!(&*a.left, Expr::Path(p) if p.path.is_ident("blind")) =>
-                        {
-                            test.blind = string(&a.right);
-                        }
+                        // The attribute takes no key but `blind`, so the
+                        // compiler has already refused any other.
+                        Expr::Assign(a) => test.blind = string(&a.right),
                         other => test.tags.extend(string(other)),
                     }
                 }

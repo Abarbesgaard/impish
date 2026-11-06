@@ -115,6 +115,7 @@ fn a_blind_test_fails_by_name() {
         out.stderr,
         format!("calc::adds_quietly is blind: it catches none of the mutants\n{NOT_MET}\n")
     );
+    assert!(!out.stdout.contains("Mutation-blind"), "{}", out.stdout);
 }
 
 #[impish::contract("mutate/A18", "mutate/A19", "mutate/A20")]
