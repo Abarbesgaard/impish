@@ -1,16 +1,16 @@
 {
   "code": {
-    "covered": 96,
-    "percent": 76.8,
-    "total": 125
+    "covered": 105,
+    "percent": 78.4,
+    "total": 134
   },
   "kinds": {
-    "functional": 62,
-    "non-functional": 3,
+    "functional": 64,
+    "non-functional": 4,
     "persisted-format": 11,
     "security": 5
   },
-  "obligations": 81,
+  "obligations": 84,
   "primitives": {
     "attribute": {
       "obligations": 6,
@@ -43,7 +43,7 @@
       "surface": []
     },
     "mutate": {
-      "obligations": 25,
+      "obligations": 28,
       "surface": [
         "cli mutate"
       ]

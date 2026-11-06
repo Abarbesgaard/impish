@@ -5,6 +5,7 @@ use std::fmt::Write;
 
 use serde_json::{Value, json};
 
+use super::erase::{self, Key};
 use super::{Mutant, Outcome};
 use crate::contract::Declared;
 
@@ -14,6 +15,8 @@ pub(super) struct Verdict {
     pub(super) lived: usize,
     pub(super) unreached: usize,
     pub(super) timed_out: usize,
+    /// Mutants never tried, as their function is erased.
+    pub(super) erased: usize,
     /// Uncaught mutants that mutants.md declares; not in the counts above.
     pub(super) declared: usize,
     pub(super) unviable: usize,
@@ -36,6 +39,7 @@ pub(super) fn judge(
     declared: &[Declared],
     declared_file: &str,
     full: bool,
+    erased: &BTreeSet<Key>,
 ) -> Verdict {
     let mut v = Verdict::default();
     for (m, outcome) in tried {
@@ -47,6 +51,7 @@ pub(super) fn judge(
             Outcome::Lived { .. } => &mut v.lived,
             Outcome::Unreached => &mut v.unreached,
             Outcome::TimedOut => &mut v.timed_out,
+            Outcome::Erased => &mut v.erased,
         } += 1;
     }
     for id in active {
@@ -87,10 +92,17 @@ pub(super) fn judge(
         }
         v.tests.push((test.to_string(), killed, unique));
     }
+    let mut reported = BTreeSet::new();
     for (mutant, outcome) in tried {
         let Some(what) = uncaught(outcome) else {
             continue;
         };
+        if let Some(f) = erase::of(mutant).filter(|f| erased.contains(f)) {
+            if reported.insert(f) {
+                v.problems.push(erase::problem(mutant, declared_file));
+            }
+            continue;
+        }
         let name = key(mutant);
         if !declared.iter().any(|d| d.name == name) {
             v.problems.push(format!(
@@ -128,6 +140,7 @@ pub(super) fn uncaught(outcome: &Outcome) -> Option<&'static str> {
         Outcome::Lived { .. } => Some("lived"),
         Outcome::Unreached => Some("unreached"),
         Outcome::TimedOut => Some("timed out"),
+        Outcome::Erased => Some("erased"),
         _ => None,
     }
 }
@@ -159,11 +172,7 @@ pub(super) fn line(
     }
     let clear = match outcome {
         Outcome::Lived { ran } if !ran.is_empty() => {
-            let ran: Vec<&str> = ran.iter().map(String::as_str).collect();
-            format!(
-                "make {} fail on it, or write the obligation it breaks and a test for it",
-                ran.join(" or ")
-            )
+            lived_clear(&ran.iter().map(String::as_str).collect::<Vec<_>>())
         }
         Outcome::Unreached => format!(
             "no contract test runs this code: write the promise that needs it, \
@@ -175,6 +184,14 @@ pub(super) fn line(
         _ => "make a contract test fail on it".to_string(),
     };
     format!("  {}  {what}{witnessed}\n    to clear: {clear}", m.name)
+}
+
+/// How to clear a mutant the `ran` tests ran past.
+pub(super) fn lived_clear(ran: &[&str]) -> String {
+    format!(
+        "make {} fail on it, or write the obligation it breaks and a test for it",
+        ran.join(" or ")
+    )
 }
 
 /// The kill matrix, per obligation and per test, and the tests with no
@@ -238,6 +255,7 @@ pub(super) fn json(
                 Outcome::Unreached => ("unreached", &none, &none, &none),
                 Outcome::TimedOut => ("timed out", &none, &none, &none),
                 Outcome::Unviable => ("unviable", &none, &none, &none),
+                Outcome::Erased => ("erased", &none, &none, &none),
             };
             let declared = declared
                 .iter()
@@ -275,6 +293,7 @@ pub(super) fn json(
         "lived": v.lived,
         "unreached": v.unreached,
         "timed_out": v.timed_out,
+        "erased": v.erased,
         "declared": v.declared,
         "unviable": v.unviable,
         "obligations": rows,

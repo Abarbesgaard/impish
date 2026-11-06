@@ -158,6 +158,23 @@ must catch at least one mutant too.
 - **kind:** non-functional
 - **status:** active
 
+### A26 — A function no test misses is reported once
+- **must:** when every viable replacement of a function's whole body goes uncaught and undeclared, and the function has other mutants, report it once, as `<file>: <fn>  ERASED: no contract test notices <fn> doing nothing`, with the tests that ran it or `and none runs it`, and a `to clear:` line; list none of its mutants, and give one problem for the function in place of one per mutant
+- **why:** when the suite never notices a function missing, every finer mutant of it goes uncaught too, and a dozen lines bury that one fact (#60)
+- **kind:** functional
+- **status:** active
+
+### A27 — An erased function's mutants are still counted
+- **must:** count an erased function's other mutants as `erased` in the summary and as `"erased"` in JSON (outcome and count), and fail the run
+- **kind:** functional
+- **status:** active
+
+### A28 — Body replacements run first
+- **must:** try every body replacement before any other mutant, and never try the other mutants of an erased function
+- **why:** the body replacements alone decide whether a function is erased, and its other mutants then add nothing but time
+- **kind:** non-functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate.rs::primitives
@@ -170,6 +187,15 @@ src/mutate.rs::finish
 src/mutate/judge.rs::matrix
 src/mutate/judge.rs::uncaught
 src/mutate/judge.rs::line
+src/mutate/judge.rs::lived_clear
+src/mutate/erase.rs::of
+src/mutate/erase.rs::body
+src/mutate/erase.rs::pass
+src/mutate/erase.rs::erase
+src/mutate/erase.rs::ready
+src/mutate/erase.rs::line
+src/mutate/erase.rs::problem
+src/mutate/erase.rs::name
 src/mutate/reach.rs::ran
 src/mutate/reach.rs::reach
 src/mutate/reach.rs::run
