@@ -147,10 +147,16 @@ fn retired_obligations_need_no_test_and_take_no_tags() {
         "- **must:** subtract",
         "- **kind:** non-functional",
         "- **status:** retired",
+        "### A3 — Proven elsewhere",
+        "- **must:** hold",
+        "- **kind:** exception",
+        "- **target:** src/lib.rs",
+        "- **status:** active",
     ]
     .join("\n");
     let p = calc(&[], &test_fn("adds", &["calc/A1"]));
-    p.write("contract/calc/README.md", &text);
+    p.write("contract/calc/README.md", &text)
+        .write("src/lib.rs", "");
     let out = p.check();
     assert_eq!(out.code, Some(0), "{}", out.stderr);
     assert_eq!(
@@ -159,13 +165,16 @@ fn retired_obligations_need_no_test_and_take_no_tags() {
     );
     p.write(
         "tests/contract/calc.rs",
-        &test_fn("adds", &["calc/A1, calc/A2"]),
+        &test_fn("adds", &["calc/A1, calc/A2, calc/A3"]),
     );
     let out = p.check();
     assert_eq!(out.code, Some(1));
     assert_eq!(
         out.stderr,
-        format!("calc::adds names `calc/A2`, which is retired\n{NOT_MET}\n")
+        format!(
+            "calc::adds names `calc/A2`, which is retired\n\
+             calc::adds names `calc/A3`, which is an exception\n{NOT_MET}\n"
+        )
     );
 }
 
