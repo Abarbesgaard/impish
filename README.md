@@ -182,7 +182,7 @@ calc: 10 mutants of 2 functions, 3 tests
   src/lib.rs:6:7: replace - with / in sub  LIVED, run by calc::subtracts
     to clear: make calc::subtracts fail on it, or write the obligation it breaks and a test for it
   …
-8 killed, 2 lived, 0 unreached, 0 timed out, 0 declared, 0 unviable
+8 killed, 2 lived, 0 unreached, 0 timed out, 0 erased, 0 declared, 0 unviable
 
   obligation  killed  unique
   calc/A1          5       5
@@ -234,6 +234,10 @@ The Contract is not met.
   code, delete the code, or declare it. impish finds this by running each
   contract test once against a probed copy, and doesn't build the mutant
   unless given `--whole-suite`.
+- **ERASED:** no contract test notices a whole function doing nothing:
+  every replacement of its body goes uncaught. The run names the function
+  once, with the tests that ran it, instead of listing every one of its
+  mutants, and doesn't try the rest; the summary counts those as `erased`.
 - **timed out:** a hang is not a catch, so it fails the same way.
 - **to clear:** each failing mutant says what would clear it.
 
@@ -385,8 +389,8 @@ jobs:
 To read the results in a later step, add `--format json` and redirect stdout:
 `cargo impish mutate calc --format json > mutate.json`. The document has
 `met`, `mutants` (each with its `outcome`: `killed`, `lived`, `unreached`,
-`timed out` or `unviable`, and the tests that caught it or ran it), the counts
-(`killed`, `lived`, `unreached`, `timed_out`, `declared`, `unviable`),
+`timed out`, `erased` or `unviable`, and the tests that caught it or ran it), the counts
+(`killed`, `lived`, `unreached`, `timed_out`, `erased`, `declared`, `unviable`),
 `obligations` and `tests` (the kill matrix) and `problems`.
 
 impish's own [CI](https://github.com/Abarbesgaard/impish/blob/main/.github/workflows/ci.yml) and

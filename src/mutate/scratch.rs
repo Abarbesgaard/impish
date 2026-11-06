@@ -11,7 +11,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, anyhow, bail};
 
-use super::{Mutant, Outcome, Position, Span, cargo};
+use super::list::{Position, Span};
+use super::{Mutant, Outcome, cargo};
 
 /// The byte offset of a 1-based line and 1-based column in characters.
 pub(super) fn offset(src: &str, line: usize, column: usize) -> Option<usize> {

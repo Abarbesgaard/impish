@@ -246,6 +246,26 @@ fn a_declared_survivor_passes() {
 const ADDS_TWICE: &str = "#[impish::contract(\"calc/A2\")]\n\
                           fn adds_two() {\n    assert_eq!(calc::add(2, 2), 4);\n}\n";
 
+/// calc with `lib` as its code, covering `fns`, under one contract test of
+/// calc/A1 and calc/A2 with `body`.
+fn calc_owning(body: &str, lib: &str, fns: &[&str]) -> Project {
+    let p = calc_crate(&format!(
+        "#[impish::contract(\"calc/A1\", \"calc/A2\")]\nfn checks() {{\n    {body}\n}}\n"
+    ));
+    p.write("src/lib.rs", lib);
+    let readme = p.read("contract/calc/README.md");
+    let covers = readme.find("```covers").expect("a covers block");
+    let fns: String = fns.iter().map(|f| format!("src/lib.rs::{f}\n")).collect();
+    p.write(
+        "contract/calc/README.md",
+        &format!("{}```covers\n{fns}```\n", &readme[..covers]),
+    );
+    p
+}
+
+const ABS: &str =
+    "pub fn abs(a: i32) -> i32 {\n    if a < 0 {\n        return -a;\n    }\n    a\n}\n";
+
 #[impish::contract("mutate/A22", "mutate/A23", "mutate/A24")]
 fn uncaught_mutants_say_what_they_are_and_how_to_clear_them() {
     let out = calc_crate(&format!("{ADDS}{DOUBLES}")).mutate("calc");
@@ -258,37 +278,104 @@ fn uncaught_mutants_say_what_they_are_and_how_to_clear_them() {
         out.stdout
     );
     assert!(
-        out.stdout
-            .contains("\n9 killed, 1 lived, 0 unreached, 0 timed out, 0 declared, 0 unviable\n"),
+        out.stdout.contains(
+            "\n9 killed, 1 lived, 0 unreached, 0 timed out, 0 erased, 0 declared, 0 unviable\n"
+        ),
         "{}",
         out.stdout
     );
 
-    let out = calc_crate(&format!("{ADDS}{ADDS_TWICE}")).mutate("calc");
+    // No test takes abs below zero.
+    let out = calc_owning("assert_eq!(calc::abs(3), 3);", ABS, &["abs"]).mutate("calc");
     assert_eq!(out.code, Some(1), "{}", out.stdout);
     assert!(
         out.stdout.contains(
-            "  src/lib.rs:6:7: replace * with + in double  UNREACHED\n    \
+            "  src/lib.rs:3:16: delete - in abs  UNREACHED\n    \
              to clear: no contract test runs this code: write the promise that needs it, \
              delete the code, or declare it unpromised in contract/calc/mutants.md\n"
         ),
         "{}",
         out.stdout
     );
+    assert!(out.stdout.contains(", 1 unreached, "), "{}", out.stdout);
     assert!(
+        out.stderr
+            .contains("src/lib.rs: delete - in abs unreached: catch it"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[impish::contract("mutate/A26", "mutate/A27", "mutate/A28")]
+fn a_function_no_test_misses_is_reported_once() {
+    let out = calc_crate(&format!("{ADDS}{DOUBLES_NOTHING}")).mutate("calc");
+    assert_eq!(out.code, Some(1), "{}", out.stdout);
+    assert!(
+        out.stdout.contains(
+            "  src/lib.rs: double  ERASED: no contract test notices double doing nothing, \
+             run by calc::doubles\n    \
+             to clear: make calc::doubles fail on it, or write the obligation it breaks and a test for it\n"
+        ),
+        "{}",
         out.stdout
-            .contains("\n5 killed, 0 lived, 5 unreached, 0 timed out, 0 declared, 0 unviable\n"),
+    );
+    assert!(!out.stdout.contains("in double "), "{}", out.stdout);
+    assert!(
+        out.stdout.contains(
+            "\n5 killed, 3 lived, 0 unreached, 0 timed out, 2 erased, 0 declared, 0 unviable\n"
+        ),
+        "{}",
+        out.stdout
+    );
+    let erased = "src/lib.rs: double erased: no contract test notices it doing nothing; \
+                  catch it in a contract test, or declare its mutants in contract/calc/mutants.md\n";
+    assert_eq!(out.stderr.matches(erased).count(), 1, "{}", out.stderr);
+    assert!(!out.stderr.contains("in double "), "{}", out.stderr);
+
+    let out =
+        calc_crate(&format!("{ADDS}{DOUBLES_NOTHING}")).mutate_with("calc", &["--format", "json"]);
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    let outcome = |name: &str| {
+        doc["mutants"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["name"] == name)
+            .map(|m| m["outcome"].clone())
+    };
+    assert_eq!(
+        outcome("src/lib.rs:6:7: replace * with + in double"),
+        Some("erased".into())
+    );
+    assert_eq!(
+        outcome("src/lib.rs:6:5: replace double -> i32 with 0"),
+        Some("lived".into())
+    );
+    assert_eq!(doc["erased"], 2);
+}
+
+#[impish::contract("mutate/A26")]
+fn a_function_none_runs_is_erased_as_unreached() {
+    let out = calc_crate(&format!("{ADDS}{ADDS_TWICE}")).mutate("calc");
+    assert!(
+        out.stdout.contains(
+            "  src/lib.rs: double  ERASED: no contract test notices double doing nothing, \
+             and none runs it\n    \
+             to clear: write the promise that needs it, delete it, \
+             or declare its mutants unpromised in contract/calc/mutants.md\n"
+        ),
         "{}",
         out.stdout
     );
     assert!(
-        out.stderr
-            .contains(&format!("{SURVIVOR} unreached: catch it")),
+        out.stdout
+            .contains(", 3 unreached, 0 timed out, 2 erased, "),
         "{}",
-        out.stderr
+        out.stdout
     );
 
-    // Only covered code is probed: a probe before `#![…]` wouldn't build.
+    // Only covered code is probed: a probe before `#![…]` wouldn't build,
+    // and the first function would look run but missed.
     let p = calc_crate(DOUBLES_EVERY_WAY);
     let lib = p.read("src/lib.rs");
     p.write(
@@ -298,7 +385,7 @@ fn uncaught_mutants_say_what_they_are_and_how_to_clear_them() {
     let out = p.mutate("calc");
     assert!(
         out.stdout
-            .contains("  src/lib.rs:2:7: replace + with - in add  UNREACHED\n"),
+            .contains("  src/lib.rs: add  ERASED: no contract test notices add doing nothing, and none runs it\n"),
         "{}",
         out.stdout
     );
@@ -313,8 +400,9 @@ fn the_summary_counts_declared_mutants_apart() {
     );
     let out = p.mutate("calc");
     assert!(
-        out.stdout
-            .contains("\n9 killed, 0 lived, 0 unreached, 0 timed out, 1 declared, 0 unviable\n"),
+        out.stdout.contains(
+            "\n9 killed, 0 lived, 0 unreached, 0 timed out, 0 erased, 1 declared, 0 unviable\n"
+        ),
         "{}",
         out.stdout
     );
@@ -376,20 +464,11 @@ fn every_mutant_caught_passes() {
 
 #[impish::contract("mutate/A8")]
 fn a_timed_out_mutant_fails_by_name() {
-    let p = calc_crate(
-        "#[impish::contract(\"calc/A1\", \"calc/A2\")]\n\
-         fn counts() {\n    assert_eq!(calc::count(3), 3);\n}\n",
-    );
     // `i *= 1` never reaches n, so that mutant loops until it is stopped.
-    p.write(
-        "src/lib.rs",
+    let p = calc_owning(
+        "assert_eq!(calc::count(3), 3);",
         "pub fn count(n: u32) -> u32 {\n    let mut i = 0;\n    while i < n {\n        i += 1;\n    }\n    i\n}\n",
-    );
-    let readme = p.read("contract/calc/README.md");
-    let covers = readme.find("```covers").expect("a covers block");
-    p.write(
-        "contract/calc/README.md",
-        &format!("{}```covers\nsrc/lib.rs::count\n```\n", &readme[..covers]),
+        &["count"],
     );
 
     let out = p.mutate("calc");
@@ -414,27 +493,13 @@ fn a_timed_out_mutant_fails_by_name() {
 
 #[impish::contract("mutate/A22", "mutate/A23")]
 fn a_mutant_reach_cannot_place_lives_unnamed() {
-    let p = calc_crate(
-        "#[impish::contract(\"calc/A1\", \"calc/A2\")]\n\
-         fn halves() {\n    let _ = calc::half(4);\n}\n",
-    );
     // A const fn can't hold a probe, so no test is known to run it.
-    p.write(
-        "src/lib.rs",
-        "pub const fn half(a: i32) -> i32 {\n    a / 2\n}\n",
-    );
-    let readme = p.read("contract/calc/README.md");
-    let covers = readme.find("```covers").expect("a covers block");
-    p.write(
-        "contract/calc/README.md",
-        &format!("{}```covers\nsrc/lib.rs::half\n```\n", &readme[..covers]),
-    );
-
-    let out = p.mutate("calc");
+    let lib = "pub const fn big(a: i32) -> bool {\n    a > 1\n}\n";
+    let out = calc_owning("assert!(calc::big(5));", lib, &["big"]).mutate("calc");
 
     assert!(
         out.stdout.contains(
-            "  src/lib.rs:2:7: replace / with * in half  LIVED\n    \
+            "  src/lib.rs:2:7: replace > with >= in big  LIVED\n    \
              to clear: make a contract test fail on it\n"
         ),
         "{}",

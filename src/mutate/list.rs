@@ -5,9 +5,62 @@ use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, bail};
+use serde::Deserialize;
 
-use super::Mutant;
 use crate::code::Function;
+
+#[derive(Deserialize)]
+pub(super) struct Mutant {
+    pub(super) name: String,
+    pub(super) file: String,
+    pub(super) replacement: String,
+    pub(super) span: Span,
+    /// `FnValue` for a replacement of the whole body.
+    #[serde(default)]
+    pub(super) genre: String,
+    /// The innermost function the mutant is in.
+    pub(super) function: Option<Within>,
+}
+
+/// What became of a mutant.
+pub(super) enum Outcome {
+    /// Caught: the active obligations tagged on the tests that failed, and
+    /// those tests.
+    Killed {
+        by: BTreeSet<String>,
+        tests: BTreeSet<String>,
+    },
+    /// Uncaught, though these contract tests run its code.
+    Lived {
+        ran: BTreeSet<String>,
+    },
+    /// No contract test runs its code, so it was never built.
+    Unreached,
+    /// The mutant doesn't build, so it proves nothing.
+    Unviable,
+    TimedOut,
+    /// Never tried: no contract test notices its function doing nothing.
+    Erased,
+}
+
+#[derive(Deserialize)]
+pub(super) struct Within {
+    pub(super) function_name: String,
+    pub(super) span: Span,
+}
+
+#[derive(Deserialize)]
+pub(super) struct Span {
+    pub(super) start: Position,
+    pub(super) end: Position,
+}
+
+/// 1-based line, 1-based column in characters, as cargo-mutants writes them.
+#[derive(Deserialize)]
+pub(super) struct Position {
+    pub(super) line: usize,
+    pub(super) column: usize,
+}
 
 /// The mutants cargo-mutants makes of the functions the primitive owns, in
 /// its order: those inside one of them, nested functions included.

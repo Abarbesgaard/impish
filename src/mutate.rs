@@ -9,9 +9,9 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, anyhow, bail};
-use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
+mod erase;
 mod judge;
 mod list;
 mod pool;
@@ -22,7 +22,7 @@ mod since;
 mod suite;
 
 use judge::{Verdict, judge};
-use list::{cargo, list};
+use list::{Mutant, Outcome, cargo, list};
 use record::record;
 use scratch::Scratch;
 use since::Changes;
@@ -31,45 +31,6 @@ use suite::Outside;
 use crate::code;
 use crate::contract::{Declared, declarations, tagged_tests};
 use impish_core::obligations;
-
-#[derive(Deserialize)]
-struct Mutant {
-    name: String,
-    file: String,
-    replacement: String,
-    span: Span,
-}
-
-#[derive(Deserialize)]
-struct Span {
-    start: Position,
-    end: Position,
-}
-
-/// 1-based line, 1-based column in characters, as cargo-mutants writes them.
-#[derive(Deserialize)]
-struct Position {
-    line: usize,
-    column: usize,
-}
-
-enum Outcome {
-    /// Caught: the active obligations tagged on the tests that failed, and
-    /// those tests.
-    Killed {
-        by: BTreeSet<String>,
-        tests: BTreeSet<String>,
-    },
-    /// Uncaught, though these contract tests run its code.
-    Lived {
-        ran: BTreeSet<String>,
-    },
-    /// No contract test runs its code, so it was never built.
-    Unreached,
-    /// The mutant doesn't build, so it proves nothing.
-    Unviable,
-    TimedOut,
-}
 
 /// Mutates the primitive, or every primitive that covers code; with a
 /// `since` ref, only the mutants on lines changed since its merge base (see
@@ -320,8 +281,8 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         .map(|m| reach.as_ref().and_then(|r| r.ran(m)))
         .collect();
 
-    let mut outcomes = Vec::new();
-    let mut caught = Vec::new();
+    let mut outcomes: Vec<Option<Outcome>> = mutants.iter().map(|_| None).collect();
+    let mut caught = vec![BTreeSet::new(); mutants.len()];
     let mut outside = Outside::new();
     let work = |scratch: &Scratch, i: usize| {
         // Outside tests may still reach it, and witness the missing promise.
@@ -330,37 +291,63 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         }
         scratch.try_mutant(&mutants[i], primitive, timeout, &tags, &active)
     };
-    let mut i = 0;
-    pool::each(
-        &scratches,
-        mutants.len(),
-        work,
-        |(mut outcome, by_outside)| {
-            let mutant = &mutants[i];
-            if let (Outcome::Lived { ran: by }, Some(r)) = (&mut outcome, &ran[i]) {
-                if r.is_empty() {
-                    outcome = Outcome::Unreached;
-                } else {
-                    by.clone_from(r);
+    let mut erased = BTreeSet::new();
+    let mut shown = (0, BTreeSet::new());
+    for first in [true, false] {
+        let order = erase::pass(&mutants, &outcomes, first);
+        let mut k = 0;
+        pool::each(
+            &scratches,
+            order.len(),
+            |scratch, j| work(scratch, order[j]),
+            |(mut outcome, by_outside)| {
+                let i = order[k];
+                k += 1;
+                if let (Outcome::Lived { ran: by }, Some(r)) = (&mut outcome, &ran[i]) {
+                    if r.is_empty() {
+                        outcome = Outcome::Unreached;
+                    } else {
+                        by.clone_from(r);
+                    }
                 }
-            }
-            i += 1;
-            if !json {
-                let witnessed = suite::witnessed(&outcome, &by_outside);
-                let line = judge::line(mutant, &outcome, &declared, &declared_file, &witnessed);
-                println!("{line}");
-            }
-            suite::tally(&mut outside, &outcome, &by_outside);
-            caught.push(by_outside);
-            outcomes.push(outcome);
-        },
-    )?;
+                suite::tally(&mut outside, &outcome, &by_outside);
+                caught[i] = by_outside;
+                outcomes[i] = Some(outcome);
+                if !first && !json {
+                    let at = (&mutants[..], &outcomes[..], &caught[..]);
+                    print!(
+                        "{}",
+                        erase::ready(&mut shown, at, &erased, &declared, &declared_file)
+                    );
+                }
+            },
+        )?;
+        if first {
+            erased = erase::erase(&mutants, &mut outcomes, &declared);
+        }
+    }
+    if !json {
+        let at = (&mutants[..], &outcomes[..], &caught[..]);
+        print!(
+            "{}",
+            erase::ready(&mut shown, at, &erased, &declared, &declared_file)
+        );
+    }
+    let outcomes: Vec<Outcome> = outcomes.into_iter().flatten().collect();
     let tried: Vec<_> = mutants.iter().zip(&outcomes).collect();
     let tests: Vec<(&str, Option<&str>)> = reasons
         .iter()
         .map(|(name, reason)| (name.as_str(), reason.as_deref()))
         .collect();
-    let verdict = judge(&active, &tests, &tried, &declared, &declared_file, full);
+    let verdict = judge(
+        &active,
+        &tests,
+        &tried,
+        &declared,
+        &declared_file,
+        full,
+        &erased,
+    );
     if write {
         record(
             root,
@@ -396,8 +383,8 @@ fn finish(
     }
     if !tried.is_empty() {
         println!(
-            "\n{} killed, {} lived, {} unreached, {} timed out, {} declared, {} unviable",
-            v.killed, v.lived, v.unreached, v.timed_out, v.declared, v.unviable
+            "\n{} killed, {} lived, {} unreached, {} timed out, {} erased, {} declared, {} unviable",
+            v.killed, v.lived, v.unreached, v.timed_out, v.erased, v.declared, v.unviable
         );
         print!("{}", judge::matrix(&v, whole));
     }
