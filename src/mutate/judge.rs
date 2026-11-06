@@ -1,6 +1,7 @@
 //! What a mutate run found: the kill matrix, and why the Contract isn't met.
 
 use std::collections::BTreeSet;
+use std::fmt::Write;
 
 use serde_json::{Value, json};
 
@@ -15,6 +16,11 @@ pub(super) struct Verdict {
     pub(super) unviable: usize,
     /// Per active obligation: its id, killed and unique counts.
     pub(super) rows: Vec<(String, usize, usize)>,
+    /// Per contract test: its name, killed and unique counts.
+    pub(super) tests: Vec<(String, usize, usize)>,
+    /// The tests with kills but no unique kill, each with the reason it is
+    /// kept, if it gives one; only when every mutant was tried.
+    pub(super) blind: Vec<(String, Option<String>)>,
     pub(super) problems: Vec<String>,
 }
 
@@ -22,7 +28,7 @@ pub(super) struct Verdict {
 /// declarations that don't hold.
 pub(super) fn judge(
     active: &[String],
-    tests: &[&str],
+    tests: &[(&str, Option<&str>)],
     tried: &[(&Mutant, &Outcome)],
     declared: &[Declared],
     declared_file: &str,
@@ -55,14 +61,25 @@ pub(super) fn judge(
         }
         v.rows.push((id.clone(), killed, unique));
     }
-    for test in tests {
-        let catches = tried
-            .iter()
-            .any(|(_, o)| matches!(o, Outcome::Killed { tests, .. } if tests.contains(*test)));
-        if full && !catches {
+    for (test, reason) in tests {
+        let mut killed = 0;
+        let mut unique = 0;
+        for (_, outcome) in tried {
+            if let Outcome::Killed { tests, .. } = outcome
+                && tests.contains(*test)
+            {
+                killed += 1;
+                unique += usize::from(tests.len() == 1);
+            }
+        }
+        if full && killed == 0 {
             v.problems
                 .push(format!("{test} is blind: it catches none of the mutants"));
         }
+        if full && killed > 0 && unique == 0 {
+            v.blind.push((test.to_string(), reason.map(str::to_string)));
+        }
+        v.tests.push((test.to_string(), killed, unique));
     }
     for (mutant, outcome) in tried {
         let what = match outcome {
@@ -101,6 +118,50 @@ pub(super) fn judge(
     v
 }
 
+/// The kill matrix, per obligation and per test, and the tests with no
+/// unique kill.
+pub(super) fn matrix(v: &Verdict, whole: bool) -> String {
+    let mut out = String::new();
+    for (heading, rows, unique) in [
+        ("obligation", &v.rows, "no other obligation's tests"),
+        ("test", &v.tests, "no other contract test"),
+    ] {
+        let width = rows
+            .iter()
+            .map(|(name, ..)| name.len())
+            .fold(10, usize::max);
+        let _ = writeln!(out, "\n  {heading:width$}  killed  unique");
+        for (name, killed, only) in rows {
+            let _ = writeln!(out, "  {name:width$}  {killed:>6}  {only:>6}");
+        }
+        let _ = writeln!(out, "  unique: caught by {unique}.");
+        if !whole && heading == "obligation" {
+            let _ = writeln!(
+                out,
+                "  Tests outside the Contract weren't run; they may catch it too."
+            );
+        }
+    }
+    let (kept, warned): (Vec<_>, Vec<_>) = v.blind.iter().partition(|(_, r)| r.is_some());
+    if !warned.is_empty() {
+        let _ = writeln!(
+            out,
+            "\nMutation-blind tests: another contract test catches every mutant they catch.\n\
+             Remove them, or say why they stay with blind = \"<reason>\"."
+        );
+        for (name, _) in warned {
+            let _ = writeln!(out, "  {name}");
+        }
+    }
+    if !kept.is_empty() {
+        let _ = writeln!(out, "\nKept with no unique kill:");
+        for (name, reason) in kept {
+            let _ = writeln!(out, "  {name}: {}", reason.as_deref().unwrap_or_default());
+        }
+    }
+    out
+}
+
 /// The run as one JSON document, for `--format json`.
 pub(super) fn json(
     primitive: &str,
@@ -137,6 +198,14 @@ pub(super) fn json(
         .iter()
         .map(|(id, killed, unique)| json!({"id": id, "killed": killed, "unique": unique}))
         .collect();
+    let tests: Vec<Value> = v
+        .tests
+        .iter()
+        .map(|(name, killed, unique)| {
+            let reason = v.blind.iter().find(|(b, _)| b == name).map(|(_, r)| r);
+            json!({"name": name, "killed": killed, "unique": unique, "blind": reason.is_some(), "reason": reason.cloned().flatten()})
+        })
+        .collect();
     json!({
         "version": 1,
         "primitive": primitive,
@@ -147,6 +216,7 @@ pub(super) fn json(
         "timed_out": v.timed_out,
         "unviable": v.unviable,
         "obligations": rows,
+        "tests": tests,
         "problems": v.problems,
     })
 }

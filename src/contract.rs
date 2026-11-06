@@ -4,7 +4,7 @@
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::visit::{self, Visit};
-use syn::{Attribute, ItemFn, LitStr, Token};
+use syn::{Attribute, Expr, ExprLit, ItemFn, Lit, Token};
 
 /// The lines of a README's covers blocks. A README without the block covers
 /// nothing.
@@ -85,6 +85,18 @@ pub struct TaggedTest {
     pub name: String,
     pub tags: Vec<String>,
     pub ignored: bool,
+    /// Why the test is kept with no unique kill: `blind = "<reason>"`.
+    pub blind: Option<String>,
+}
+
+/// The string in `expr`, when it is a string literal.
+fn string(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Lit(ExprLit {
+            lit: Lit::Str(s), ..
+        }) => Some(s.value()),
+        _ => None,
+    }
 }
 
 fn is(attr: &Attribute, path: &[&str]) -> bool {
@@ -107,16 +119,25 @@ pub fn tagged_tests(src: &str) -> syn::Result<Vec<TaggedTest>> {
         fn visit_item_fn(&mut self, f: &ItemFn) {
             let marked = f.attrs.iter().any(|a| is_contract(a) || is(a, &["test"]));
             if marked {
-                let tags = f.attrs.iter().filter(|a| is_contract(a)).flat_map(|a| {
-                    a.parse_args_with(Punctuated::<LitStr, Token![,]>::parse_terminated)
-                        .map(|names| names.iter().map(LitStr::value).collect::<Vec<_>>())
+                let mut test = TaggedTest {
+                    name: f.sig.ident.to_string(),
+                    tags: Vec::new(),
+                    ignored: f.attrs.iter().any(|a| is(a, &["ignore"])),
+                    blind: None,
+                };
+                let args = f.attrs.iter().filter(|a| is_contract(a)).flat_map(|a| {
+                    a.parse_args_with(Punctuated::<Expr, Token![,]>::parse_terminated)
                         .unwrap_or_default()
                 });
-                self.0.push(TaggedTest {
-                    name: f.sig.ident.to_string(),
-                    tags: tags.collect(),
-                    ignored: f.attrs.iter().any(|a| is(a, &["ignore"])),
-                });
+                for arg in args {
+                    match &arg {
+                        // The attribute takes no key but `blind`, so the
+                        // compiler has already refused any other.
+                        Expr::Assign(a) => test.blind = string(&a.right),
+                        other => test.tags.extend(string(other)),
+                    }
+                }
+                self.0.push(test);
             }
             visit::visit_item_fn(self, f);
         }

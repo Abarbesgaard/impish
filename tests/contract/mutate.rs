@@ -115,6 +115,51 @@ fn a_blind_test_fails_by_name() {
         out.stderr,
         format!("calc::adds_quietly is blind: it catches none of the mutants\n{NOT_MET}\n")
     );
+    assert!(!out.stdout.contains("Mutation-blind"), "{}", out.stdout);
+}
+
+#[impish::contract("mutate/A18", "mutate/A19", "mutate/A20")]
+fn the_kill_matrix_names_tests_with_no_unique_kill() {
+    let again = "#[impish::contract(\"calc/A1\", blind = \"spells out the sum\")]\n\
+                 fn adds_again() {\n    assert_eq!(calc::add(2, 3), 5);\n}\n\n";
+    let p = calc_crate(&format!("{ADDS}{again}{DOUBLES_EVERY_WAY}"));
+    let out = p.mutate("calc");
+
+    assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
+    let table = out.stdout.find("\n  test ").expect("a test matrix");
+    let rows: Vec<Vec<&str>> = out.stdout[table..]
+        .lines()
+        .skip(2)
+        .take(3)
+        .map(|l| l.split_whitespace().collect())
+        .collect();
+    assert_eq!(rows[0][0], "calc::adds", "{}", out.stdout);
+    assert_eq!(rows[1][0], "calc::adds_again");
+    assert_eq!(rows[2][0], "calc::doubles");
+    assert_eq!(rows[0][1], rows[1][1], "{}", out.stdout);
+    assert_ne!(rows[0][1], "0");
+    assert_eq!((rows[0][2], rows[1][2]), ("0", "0"), "{}", out.stdout);
+    assert_eq!(rows[2][1], rows[2][2], "{}", out.stdout);
+    assert!(
+        out.stdout.contains(
+            "  unique: caught by no other contract test.\n\n\
+             Mutation-blind tests: another contract test catches every mutant they catch.\n\
+             Remove them, or say why they stay with blind = \"<reason>\".\n  calc::adds\n\n\
+             Kept with no unique kill:\n  calc::adds_again: spells out the sum\n"
+        ),
+        "{}",
+        out.stdout
+    );
+
+    let json = p.mutate_with("calc", &["--format", "json"]);
+    let doc: serde_json::Value = serde_json::from_str(&json.stdout).unwrap();
+    let tests = &doc["tests"];
+    assert_eq!(tests[0]["name"], "calc::adds", "{doc}");
+    assert_eq!(tests[0]["unique"], 0);
+    assert_eq!(tests[0]["blind"], true);
+    assert_eq!(tests[1]["reason"], "spells out the sum");
+    assert_eq!(tests[2]["blind"], false);
+    assert_eq!(tests[2]["killed"], tests[2]["unique"]);
 }
 
 #[impish::contract("mutate/A3")]
