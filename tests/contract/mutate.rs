@@ -402,6 +402,44 @@ fn a_timed_out_mutant_fails_by_name() {
              or declare it in contract/calc/mutants.md\n{NOT_MET}\n"
         )
     );
+    assert!(
+        out.stdout.contains(
+            "timed out\n    to clear: make the code finish under its tests, \
+             or declare it in contract/calc/mutants.md\n"
+        ),
+        "{}",
+        out.stdout
+    );
+}
+
+#[impish::contract("mutate/A22", "mutate/A23")]
+fn a_mutant_reach_cannot_place_lives_unnamed() {
+    let p = calc_crate(
+        "#[impish::contract(\"calc/A1\", \"calc/A2\")]\n\
+         fn halves() {\n    let _ = calc::half(4);\n}\n",
+    );
+    // A const fn can't hold a probe, so no test is known to run it.
+    p.write(
+        "src/lib.rs",
+        "pub const fn half(a: i32) -> i32 {\n    a / 2\n}\n",
+    );
+    let readme = p.read("contract/calc/README.md");
+    let covers = readme.find("```covers").expect("a covers block");
+    p.write(
+        "contract/calc/README.md",
+        &format!("{}```covers\nsrc/lib.rs::half\n```\n", &readme[..covers]),
+    );
+
+    let out = p.mutate("calc");
+
+    assert!(
+        out.stdout.contains(
+            "  src/lib.rs:2:7: replace / with * in half  LIVED\n    \
+             to clear: make a contract test fail on it\n"
+        ),
+        "{}",
+        out.stdout
+    );
 }
 
 #[impish::contract("mutate/A9")]
