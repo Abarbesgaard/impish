@@ -287,6 +287,14 @@ fn uncaught_mutants_say_what_they_are_and_how_to_clear_them() {
         "{}",
         out.stderr
     );
+
+    let out = calc_crate(DOUBLES_EVERY_WAY).mutate("calc");
+    assert!(
+        out.stdout
+            .contains("  src/lib.rs:2:7: replace + with - in add  UNREACHED\n"),
+        "{}",
+        out.stdout
+    );
 }
 
 #[impish::contract("mutate/A24")]
@@ -312,17 +320,27 @@ fn unreached_mutants_are_not_built() {
     let lib = p.read("src/lib.rs");
     p.write(
         "src/lib.rs",
-        &format!("{lib}\npub struct W(pub i32);\n\npub fn wrap(a: i32) -> W {{\n    W(a)\n}}\n"),
+        &format!(
+            "{lib}\npub struct W(pub i32);\n\npub fn wrap(a: i32) -> W {{\n    W(a)\n}}\n\n\
+             impl W {{\n    pub fn get(&self) -> i32 {{\n        self.0\n    }}\n}}\n"
+        ),
     );
     p.write(
         "contract/calc/README.md",
-        &(readme(&["A1"]) + "```covers\nsrc/lib.rs::add\nsrc/lib.rs::wrap\n```\n"),
+        &(readme(&["A1"])
+            + "```covers\nsrc/lib.rs::add\nsrc/lib.rs::wrap\nsrc/lib.rs::W::get\n```\n"),
     );
     let wrap = "replace wrap -> W with Default::default()";
 
     let out = p.mutate("calc");
     assert!(
         out.stdout.contains(&format!("{wrap}  UNREACHED\n")),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("replace W::get -> i32 with 0  UNREACHED\n"),
         "{}",
         out.stdout
     );
