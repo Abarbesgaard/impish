@@ -288,7 +288,14 @@ fn uncaught_mutants_say_what_they_are_and_how_to_clear_them() {
         out.stderr
     );
 
-    let out = calc_crate(DOUBLES_EVERY_WAY).mutate("calc");
+    // Only covered code is probed: a probe before `#![…]` wouldn't build.
+    let p = calc_crate(DOUBLES_EVERY_WAY);
+    let lib = p.read("src/lib.rs");
+    p.write(
+        "src/lib.rs",
+        &format!("{lib}\npub fn quiet() {{\n    #![allow(unused)]\n}}\n"),
+    );
+    let out = p.mutate("calc");
     assert!(
         out.stdout
             .contains("  src/lib.rs:2:7: replace + with - in add  UNREACHED\n"),
