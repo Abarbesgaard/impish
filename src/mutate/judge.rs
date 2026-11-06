@@ -126,7 +126,10 @@ pub(super) fn matrix(v: &Verdict, whole: bool) -> String {
         ("obligation", &v.rows, "no other obligation's tests"),
         ("test", &v.tests, "no other contract test"),
     ] {
-        let width = rows.iter().map(|(name, ..)| name.len()).fold(10, usize::max);
+        let width = rows
+            .iter()
+            .map(|(name, ..)| name.len())
+            .fold(10, usize::max);
         let _ = writeln!(out, "\n  {heading:width$}  killed  unique");
         for (name, killed, only) in rows {
             let _ = writeln!(out, "  {name:width$}  {killed:>6}  {only:>6}");
