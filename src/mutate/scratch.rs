@@ -26,6 +26,14 @@ pub(super) fn offset(src: &str, line: usize, column: usize) -> Option<usize> {
     Some(start + column)
 }
 
+/// Which tests a run takes: all, a primitive's module, or exactly these.
+#[derive(Clone, Copy)]
+pub(super) enum Only<'a> {
+    All,
+    Module(&'a str),
+    Exactly(&'a BTreeSet<String>),
+}
+
 /// `src` with the span replaced.
 fn mutated(src: &str, span: &Span, replacement: &str) -> anyhow::Result<String> {
     let at = |p: &Position| offset(src, p.line, p.column);
@@ -122,7 +130,7 @@ impl Scratch {
     ) -> anyhow::Result<Option<BTreeSet<String>>> {
         let mut failed = BTreeSet::new();
         for (name, exe) in &built.outside {
-            let Some(tests) = self.test(exe, None, timeout)? else {
+            let Some(tests) = self.test(exe, Only::All, timeout)? else {
                 return Ok(None);
             };
             failed.extend(tests.into_iter().map(|t| format!("{name}::{t}")));
@@ -130,17 +138,25 @@ impl Scratch {
         Ok(Some(failed))
     }
 
-    /// The tests that fail, those under the `primitive` module when given,
-    /// or `None` when they time out.
+    /// The tests that fail of those `only` names, or `None` when they time
+    /// out.
     pub(super) fn test(
         &self,
         exe: &Path,
-        primitive: Option<&str>,
+        only: Only,
         timeout: Option<Duration>,
     ) -> anyhow::Result<Option<BTreeSet<String>>> {
         let mut cmd = Command::new(exe);
-        if let Some(primitive) = primitive {
-            cmd.arg(format!("{primitive}::"));
+        match only {
+            Only::All => {}
+            Only::Module(primitive) => {
+                cmd.arg(format!("{primitive}::"));
+            }
+            // With no names, `--exact` would run every test.
+            Only::Exactly(tests) if tests.is_empty() => return Ok(Some(BTreeSet::new())),
+            Only::Exactly(tests) => {
+                cmd.args(tests).arg("--exact");
+            }
         }
         let mut child = cmd
             .current_dir(&self.dir)
@@ -173,16 +189,22 @@ impl Scratch {
         ))
     }
 
-    /// The mutant's outcome against the contract tests, and with the whole
-    /// suite the outside tests that catch it.
+    /// The mutant's outcome against the contract tests that `reach` it, all
+    /// of them when unknown, and with the whole suite the outside tests that
+    /// catch it.
     pub(super) fn try_mutant(
         &self,
         mutant: &Mutant,
         primitive: &str,
         timeout: Duration,
-        tags: &BTreeMap<String, Vec<String>>,
-        active: &[String],
+        (tags, active): (&BTreeMap<String, Vec<String>>, &[String]),
+        reach: Option<&BTreeSet<String>>,
     ) -> anyhow::Result<(Outcome, BTreeSet<String>)> {
+        // Outside tests may still reach it, and witness the missing promise.
+        if !self.whole && reach.is_some_and(BTreeSet::is_empty) {
+            return Ok((Outcome::Unreached, BTreeSet::new()));
+        }
+        let only = reach.map_or(Only::Module(primitive), Only::Exactly);
         let path = self.dir.join(&mutant.file);
         let original =
             fs::read_to_string(&path).with_context(|| format!("read {}", mutant.file))?;
@@ -193,7 +215,7 @@ impl Scratch {
         let mut outside = BTreeSet::new();
         let outcome = match self.build()? {
             None => Outcome::Unviable,
-            Some(built) => match self.test(&built.contract, Some(primitive), Some(timeout))? {
+            Some(built) => match self.test(&built.contract, only, Some(timeout))? {
                 None => Outcome::TimedOut,
                 Some(failed) => {
                     let by: BTreeSet<String> = failed

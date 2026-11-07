@@ -25,7 +25,7 @@ mod suite;
 use judge::{Verdict, judge};
 use list::{Mutant, Outcome, cargo, list};
 use record::record;
-use scratch::Scratch;
+use scratch::{Only, Scratch};
 use since::Changes;
 use suite::Outside;
 
@@ -266,7 +266,7 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         .build()?
         .ok_or_else(|| anyhow!("the tests don't build"))?;
     let started = Instant::now();
-    let mut failed = match scratch.test(&built.contract, Some(primitive), None)? {
+    let mut failed = match scratch.test(&built.contract, Only::Module(primitive), None)? {
         Some(failed) => failed,
         None => bail!("the contract tests time out before any mutation"),
     };
@@ -303,11 +303,8 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
     let mut caught = vec![BTreeSet::new(); mutants.len()];
     let mut outside = Outside::new();
     let work = |scratch: &Scratch, i: usize| {
-        // Outside tests may still reach it, and witness the missing promise.
-        if !whole && ran[i].as_ref().is_some_and(BTreeSet::is_empty) {
-            return Ok((Outcome::Unreached, BTreeSet::new()));
-        }
-        scratch.try_mutant(&mutants[i], primitive, timeout, &tags, &active)
+        let m = &mutants[i];
+        scratch.try_mutant(m, primitive, timeout, (&tags, &active), ran[i].as_ref())
     };
     let mut erased = BTreeSet::new();
     let mut shown = (0, BTreeSet::new());
