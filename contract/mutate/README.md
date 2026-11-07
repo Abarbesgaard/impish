@@ -175,9 +175,31 @@ must catch at least one mutant too.
 - **kind:** non-functional
 - **status:** active
 
+### A29 — --dry-run lists the mutants
+- **must:** with `--dry-run`, print each mutant the run would try, with `declared <kind>` after each mutants.md declares, and the count of mutants and of declared ones; in `--format json`, list them with `name` and `declared`, and `count`; build and test nothing, and exit 0
+- **why:** a CI job should see what a run will cost before paying for it (#61)
+- **kind:** functional
+- **status:** active
+
+### A30 — --timeout-coefficient scales the budget
+- **must:** with `--timeout-coefficient <x>`, give each mutant x times the baseline's run time, per mutant tried at once, before counting it as timed out; 5 when left out
+- **why:** a slow or noisy suite needs room, and a quick one a tighter bound, without editing impish
+- **kind:** functional
+- **status:** active
+
+### A31 — Bad knobs are undecided
+- **must:** exit 2, naming the flag, for a `--jobs` below 1 or a `--timeout-coefficient` that isn't a finite number above zero
+- **kind:** functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
-src/mutate.rs::primitives
+src/mutate/list.rs::primitives
+src/mutate.rs::new
+src/mutate/dry.rs::kind
+src/mutate/dry.rs::text
+src/mutate/dry.rs::json
+src/main.rs::positive
 src/mutate.rs::mutate
 src/mutate/since.rs::since
 src/mutate/since.rs::touch_contract

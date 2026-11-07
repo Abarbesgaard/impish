@@ -1036,3 +1036,106 @@ fn jobs_try_mutants_at_once_in_order() {
     assert_eq!(out.stdout, serial.stdout);
     assert_eq!(copies(), half.clamp(1, mutants));
 }
+
+#[impish::contract("mutate/A29")]
+fn a_dry_run_lists_the_mutants_and_builds_nothing() {
+    let p = calc_crate(&format!("{ADDS}{DOUBLES}"));
+    p.write(
+        "contract/calc/mutants.md",
+        &declaring("unpromised", &[SURVIVOR]),
+    );
+
+    let out = p.mutate_with("calc", &["--dry-run"]);
+
+    assert_eq!(out.code, Some(0), "{}{}", out.stdout, out.stderr);
+    let listed = out
+        .stdout
+        .lines()
+        .filter(|l| l.starts_with("  src/"))
+        .count();
+    assert!(listed > 1, "{}", out.stdout);
+    assert!(
+        out.stdout.starts_with(&format!(
+            "calc: {listed} mutants of 2 functions, a dry run\n"
+        )),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("\n  src/lib.rs:6:7: replace * with + in double  declared unpromised\n"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout
+            .contains("\n  src/lib.rs:2:7: replace + with - in add\n")
+    );
+    assert!(
+        out.stdout.contains(&format!(
+            "\n{listed} mutants, 1 declared; nothing built or tested\n"
+        )),
+        "{}",
+        out.stdout
+    );
+    assert!(!p.path().join("target/impish/mutate").exists());
+
+    let out = p.mutate_with("calc", &["--dry-run", "--format", "json"]);
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
+    assert_eq!(doc["dry_run"], true);
+    assert_eq!(doc["count"], listed);
+    let mutants = doc["mutants"].as_array().unwrap();
+    assert_eq!(mutants.len(), listed);
+    let survivor = mutants
+        .iter()
+        .find(|m| m["name"] == "src/lib.rs:6:7: replace * with + in double")
+        .unwrap();
+    assert_eq!(survivor["declared"], "unpromised");
+    assert!(mutants.iter().filter(|m| m["declared"].is_null()).count() == listed - 1);
+}
+
+#[impish::contract("mutate/A30")]
+fn the_timeout_coefficient_scales_the_budget() {
+    // `- with +` makes the test sleep 12s: past a budget of 10s and a
+    // sliver of the baseline, within one of a hundred baselines.
+    let p = calc_owning(
+        "std::thread::sleep(std::time::Duration::from_secs(calc::secs(1) * 6));\n    \
+         assert_eq!(calc::secs(1), 0);",
+        "pub fn secs(a: u64) -> u64 {\n    a - 1\n}\n",
+        &["secs"],
+    );
+    let mutant = "  src/lib.rs:2:7: replace - with + in secs  ";
+
+    let tight = p.mutate_with("calc", &["--timeout-coefficient", "0.001"]);
+    assert!(
+        tight.stdout.contains(&format!("{mutant}timed out\n")),
+        "{}",
+        tight.stdout
+    );
+
+    let loose = p.mutate_with("calc", &["--timeout-coefficient", "100"]);
+    assert!(
+        loose
+            .stdout
+            .contains(&format!("{mutant}killed by calc/A1, calc/A2\n")),
+        "{}",
+        loose.stdout
+    );
+}
+
+#[impish::contract("mutate/A31")]
+fn bad_knobs_are_undecided() {
+    let p = calc_crate(ADDS);
+    for (args, flag) in [
+        (&["-j", "0"][..], "--jobs"),
+        (&["--timeout-coefficient", "0"], "--timeout-coefficient"),
+        (&["--timeout-coefficient=-1"], "--timeout-coefficient"),
+        (&["--timeout-coefficient", "NaN"], "--timeout-coefficient"),
+        (&["--timeout-coefficient", "inf"], "--timeout-coefficient"),
+    ] {
+        let out = p.mutate_any_jobs(&[&["calc"], args].concat());
+        assert_eq!(out.code, Some(2), "{args:?}: {}", out.stderr);
+        assert!(out.stderr.contains(flag), "{args:?}: {}", out.stderr);
+    }
+}
