@@ -192,6 +192,12 @@ must catch at least one mutant too.
 - **kind:** functional
 - **status:** active
 
+### A32 — Only the tests that reach a mutant run it
+- **must:** run each mutant against only the contract tests that entered its innermost block, or the primitive's whole contract suite when reach can't place it, and reach the same verdict either way
+- **why:** a test that never enters the mutated code can't notice it, so running it only costs time (#96)
+- **kind:** non-functional
+- **status:** active
+
 ```covers
 src/mutate.rs::run
 src/mutate/list.rs::primitives

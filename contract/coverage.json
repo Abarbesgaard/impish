@@ -6,11 +6,11 @@
   },
   "kinds": {
     "functional": 67,
-    "non-functional": 4,
+    "non-functional": 5,
     "persisted-format": 11,
     "security": 5
   },
-  "obligations": 87,
+  "obligations": 88,
   "primitives": {
     "attribute": {
       "obligations": 6,
@@ -43,7 +43,7 @@
       "surface": []
     },
     "mutate": {
-      "obligations": 31,
+      "obligations": 32,
       "surface": [
         "cli mutate"
       ]

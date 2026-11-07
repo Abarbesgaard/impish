@@ -235,7 +235,8 @@ The Contract is not met.
   No test can be strengthened to catch it: write the promise that needs the
   code, delete the code, or declare it. impish finds this by running each
   contract test once against a probed copy, and doesn't build the mutant
-  unless given `--whole-suite`.
+  unless given `--whole-suite`. The same probe means each mutant is run
+  against only the contract tests that reach it.
 - **ERASED:** no contract test notices a whole function doing nothing:
   every replacement of its body goes uncaught. The run names the function
   once, with the tests that ran it, instead of listing every one of its

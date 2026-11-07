@@ -1139,3 +1139,33 @@ fn bad_knobs_are_undecided() {
         assert!(out.stderr.contains(flag), "{args:?}: {}", out.stderr);
     }
 }
+
+#[impish::contract("mutate/A32")]
+fn only_the_tests_that_reach_a_mutant_run_it() {
+    let p = calc_crate("");
+    let log = p.path().join("runs.log");
+    p.write(
+        "tests/contract/calc.rs",
+        &format!(
+            "{ADDS}#[impish::contract(\"calc/A2\")]\n\
+             fn bystander() {{\n    use std::io::Write;\n    \
+             let mut f = std::fs::OpenOptions::new().create(true).append(true)\
+             .open({log:?}).unwrap();\n    writeln!(f, \"ran\").unwrap();\n}}\n"
+        ),
+    );
+
+    let out = p.mutate("calc");
+    assert!(
+        out.stdout
+            .contains("replace add -> i32 with 0  killed by calc/A1\n"),
+        "{}",
+        out.stdout
+    );
+    let runs = std::fs::read_to_string(&log).unwrap_or_default();
+    assert!(runs.lines().count() <= 2, "{runs}{}", out.stdout);
+
+    std::fs::remove_file(&log).unwrap();
+    let out = p.mutate_with("calc", &["--whole-suite"]);
+    let runs = std::fs::read_to_string(&log).unwrap_or_default();
+    assert!(runs.lines().count() <= 2, "{runs}{}", out.stdout);
+}
