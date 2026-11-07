@@ -1,6 +1,6 @@
 {
   "format": ["bash", "yaml", "markdown", "toml"],
-  "ignore": ["**/target/**", "**/node_modules/**", "**/Cargo.lock", "contract/coverage.json"],
+  "ignore": ["**/target/**", "**/node_modules/**", "**/Cargo.lock"],
   "gitignore": true,
   "exitCode": 1,
   "reporters": ["console"]

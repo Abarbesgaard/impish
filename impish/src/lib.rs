@@ -17,8 +17,8 @@
 //! typo or a broken promise can't slip into a green build.
 //!
 //! This crate is the attribute only. The [`cargo-impish`] command checks that
-//! every obligation has a test (`cargo impish check`) and that the tests catch
-//! real bugs (`cargo impish mutate`). The [README] explains the method.
+//! every obligation has a test (`cargo impish check`). The [README] explains
+//! the method.
 //!
 //! # Getting started
 //!
@@ -43,10 +43,6 @@
 //! - **must:** keep ASCII letters and digits, lowercased
 //! - **kind:** functional
 //! - **status:** active
-//!
-//! ```covers
-//! src/lib.rs::slugify
-//! ```
 //! ````
 //!
 //! Prove it in `tests/contract/slugify.rs`, and list the primitive in
@@ -64,7 +60,7 @@
 //! obligation is proved:
 //!
 //! ```text
-//! The Contract holds: 1 obligations across 1 primitives.
+//! 1 primitives, 1 obligations, all tested
 //! ```
 //!
 //! # Existing tests
@@ -108,7 +104,7 @@
 //! (`CARGO_MANIFEST_DIR`). Several tags on one test are fine:
 //! `#[impish::contract("cli/A1", "cli/A2")]`.
 //!
-//! The Contract format, every `check` and `mutate` message, and how to adopt
+//! The Contract format, every `check` message, and how to adopt
 //! impish in an existing crate are in the [README].
 //!
 //! [`cargo-impish`]: https://crates.io/crates/cargo-impish
@@ -153,13 +149,6 @@ use syn::{Attribute, Expr, ExprLit, Lit, Token};
 /// }
 /// ```
 ///
-/// A test whose every catch under `cargo impish mutate` another contract test
-/// makes too is reported as mutation-blind. To keep one on purpose, say why:
-///
-/// ```rust,ignore
-/// #[impish::contract("parse/A1", blind = "spells out the empty case")]
-/// ```
-///
 /// `#[ignore]` works as usual, but an ignored test proves nothing:
 /// `cargo impish check` reports its obligations as unproved.
 #[proc_macro_attribute]
@@ -177,23 +166,6 @@ pub fn contract(attr: TokenStream, item: TokenStream) -> TokenStream {
                 lit: Lit::Str(name),
                 ..
             }) => names.push(name.clone()),
-            Expr::Assign(a) => {
-                let blind = matches!(&*a.left, Expr::Path(p) if p.path.is_ident("blind"));
-                if !blind
-                    || !matches!(
-                        &*a.right,
-                        Expr::Lit(ExprLit {
-                            lit: Lit::Str(_),
-                            ..
-                        })
-                    )
-                {
-                    wrong.push(syn::Error::new_spanned(
-                        a,
-                        "the one key is `blind = \"<reason>\"`: why a test with no unique kill is kept",
-                    ));
-                }
-            }
             other => wrong.push(syn::Error::new_spanned(other, "expected string literal")),
         }
     }
@@ -302,9 +274,6 @@ fn check(root: &std::path::Path, tag: &str) -> Result<String, String> {
     match declared.get(&id) {
         None => Err(format!("`{tag}`: {file} doesn't declare A{id}")),
         Some(o) if o.retired => Err(format!("`{tag}`: {file} declares A{id} retired")),
-        Some(o) if !o.needs_test() => Err(format!(
-            "`{tag}`: {file} declares A{id} an exception, which no test proves"
-        )),
         Some(_) => Ok(path.display().to_string()),
     }
 }

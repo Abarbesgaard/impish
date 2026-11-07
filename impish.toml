@@ -1,4 +1,0 @@
-# impish's own settings; see contract/README.md.
-
-[surface]
-command = ["sh", "scripts/surface.sh"]

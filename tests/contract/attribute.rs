@@ -31,36 +31,20 @@ fn names_nothing() {}
 #[impish::contract(A1)]
 fn names_an_ident() {}
 
-#[impish::contract(blind = "kept")]
-fn gives_only_a_reason() {}
-
-#[impish::contract("p/A1", colour = "red")]
-fn gives_another_key() {}
-
-#[impish::contract("p/A1", blind = 3)]
-fn gives_no_reason() {}
+#[impish::contract("p/A1", blind = "kept")]
+fn gives_a_key() {}
 "#,
     )
     .test();
     assert!(!out.status.success(), "{}", out.text());
     let says = "name the obligations this test proves: #[impish::contract(\"<primitive>/A<n>\")]";
-    assert_eq!(out.text().matches(says).count(), 2, "{}", out.text());
+    assert_eq!(out.text().matches(says).count(), 1, "{}", out.text());
     assert_eq!(
         out.text().matches("expected string literal").count(),
-        1,
+        2,
         "{}",
         out.text()
     );
-    let key = "the one key is `blind = \"<reason>\"`: why a test with no unique kill is kept";
-    assert_eq!(out.text().matches(key).count(), 2, "{}", out.text());
-}
-
-#[impish::contract("attribute/A2")]
-fn a_reason_beside_the_tags_compiles() {
-    let out = Crate::with_tests("#[impish::contract(\"p/A1\", blind = \"kept\")]\nfn kept() {}\n")
-        .write("contract/p/README.md", &readme(&["A1"]))
-        .test();
-    assert!(out.status.success(), "{}", out.text());
 }
 
 #[impish::contract("attribute/A3")]

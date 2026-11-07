@@ -19,7 +19,7 @@ body:
       label: Intent
       description: What should impish do that it doesn't today, and why does it matter? Say who it's for and what they're trying to get done.
       placeholder: |
-        When a primitive covers a function in a workspace member, `cargo impish mutate` should mutate it, so a workspace can check its whole Contract has teeth, not only the root crate's.
+        When a workspace has several crates, `cargo impish check` should check each member's Contract, so one run covers the whole workspace.
     validations:
       required: true
   - type: dropdown
@@ -28,13 +28,12 @@ body:
       label: Primitive
       description: |
         Which part of the Contract does this belong to? Each primitive is a folder under [contract/](https://github.com/Abarbesgaard/impish/tree/main/contract):
-        `attribute` is `#[impish::contract]`, `check` is `cargo impish check`, `cli` is how impish is invoked, `mutate` is `cargo impish mutate`.
+        `attribute` is `#[impish::contract]`, `check` is `cargo impish check`, `cli` is how impish is invoked.
         Pick "A new primitive" if none fits, and name it in the obligations below.
       options:
         - attribute
         - check
         - cli
-        - mutate
         - A new primitive
         - Not sure
     validations:
@@ -47,7 +46,7 @@ body:
         One block per obligation, in the [Contract's format](https://github.com/Abarbesgaard/impish/blob/main/contract/README.md). Number them A1, A2, … here; they're renumbered to follow the primitive's existing ones when they land, and numbers are never reused.
         - **must:** one observable behaviour a contract test can check from outside: what impish prints, writes, refuses, exits with, or what fails to compile. Not how the code does it. Look at [contract/check/README.md](https://github.com/Abarbesgaard/impish/blob/main/contract/check/README.md) for the style: "fail, naming the file and line, when …".
         - **why:** optional; the reason, when it isn't obvious.
-        - **kind:** `functional`, `non-functional` (speed, size, limits, what it leaves untouched), `persisted-format` (files impish writes, like `coverage.json`), `ordering` or `security` (what untrusted input can't make it do).
+        - **kind:** `functional`, `non-functional` (speed, size, limits, what it leaves untouched), `persisted-format` (file formats impish reads, like the Contract's), `ordering` or `security` (what untrusted input can't make it do).
         - **status:** `active` for a new obligation.
 
         Cover the failure cases too: what impish refuses, the message it names, and what it leaves untouched when it does.
@@ -60,18 +59,12 @@ body:
       render: markdown
     validations:
       required: true
-  - type: input
-    id: surface
-    attributes:
-      label: Surface
-      description: What a contract test would drive, as `cli <command>` or `attribute impish::<name>`, comma-separated. [scripts/surface.sh](https://github.com/Abarbesgaard/impish/blob/main/scripts/surface.sh) lists today's surface.
-      placeholder: cli mutate
   - type: textarea
     id: existing
     attributes:
       label: Behaviour this changes
       description: |
-        Changing something impish already does? Name the obligations it touches (e.g. `check/A5`) and say what impish does today. [Rule 20](https://impatientprogramming.org/rules/#rule-20): pin the existing behaviour with an obligation before changing it, and find out why each fence is there before you move it; [contract/decisions.toml](https://github.com/Abarbesgaard/impish/blob/main/contract/decisions.toml) records why. An obligation whose promise changes is retired and replaced, not edited.
+        Changing something impish already does? Name the obligations it touches (e.g. `check/A5`) and say what impish does today. [Rule 20](https://impatientprogramming.org/rules/#rule-20): pin the existing behaviour with an obligation before changing it, and find out why each fence is there before you move it; [docs/decisions/](https://github.com/Abarbesgaard/impish/tree/main/docs/decisions) records why. An obligation whose promise changes is retired and replaced, not edited.
   - type: textarea
     id: unknowns
     attributes:

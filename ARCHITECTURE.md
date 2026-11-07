@@ -1,7 +1,7 @@
 # Architecture
 
 impish is a Cargo workspace of three crates. This page, the decision records in
-[contract/decisions.toml](contract/decisions.toml) and the [Contract](contract/) are enough to
+[docs/decisions/](docs/decisions/) and the [Contract](contract/) are enough to
 regenerate it (Impatient Programming, rule 17): the Contract says what impish
 promises, the records say why it is built this way, and this page says where
 each part lives.
@@ -9,61 +9,33 @@ each part lives.
 ## Crates
 
 ```
-core/      impish-core   the Contract's README format: obligations, kinds, statuses
+core/      impish-core   the Contract's README format: obligations and their fields
 impish/    impish        #[impish::contract]: the attribute users' contract tests carry
-src/       cargo-impish  the `cargo impish` binary: check and mutate
+src/       cargo-impish  the `cargo impish` binary: check
 ```
 
 Dependencies point inwards: `cargo-impish` and `impish` both depend on
 `impish-core`, never on each other, and `impish-core` depends on nothing but
-`std`. ([D4](contract/decisions.toml))
+`std`. ([0004](docs/decisions/0004-impish-core-is-the-shared-format.md))
 
 ## cargo-impish
 
 ```
 src/
   main.rs       parses the command line (clap) and finds the nearest contract/
-  check.rs      `cargo impish check`: holds the Contract to its tests, writes coverage
+  check.rs      `cargo impish check`: every obligation has a test
   check/
-    exceptions.rs obligations that excuse a gap, held to their targets
-    scope.rs    the ceilings in contract/scope.toml, counted
     stray.rs    contract tags and tests outside the primitives' test files
-  conditions.rs `cargo impish conditions`: re-checks the decision records' conditions
-  decisions.rs  reads decision records from contract/, checks their shape and references
-  decisions/
-    evaluate.rs judges one condition: dep, env, file or rustc
-  regen.rs      `cargo impish regen`: a pack to rebuild a primitive from its Contract
-  regen/
-    stubs.rs    the covered functions' signatures, with `todo!()` bodies
-  mutate.rs     `cargo impish mutate`: a kill matrix per obligation, via cargo-mutants;
-                every mutant caught or declared in mutants.md
-  mutate/
-    scratch.rs  the copy of the project mutate breaks, one mutant at a time
-    judge.rs    the verdict on the mutants, and its JSON document
-    since.rs    what changed since a git ref, for `mutate --since`
-    suite.rs    witnesses and duplicates outside the Contract, for `--whole-suite`
-    record.rs   the mutate result `--write` leaves in coverage.json
-    pool.rs     tries mutants on several scratch copies at once, for `-j`
-    list.rs     the mutants cargo-mutants makes of the covered code
-  code.rs       every function in the crate, and which primitive's covers line
-                owns it: the most specific, then the first by name
-  contract.rs   reads covers and surface blocks, mutants.md declarations, and
-                #[impish::contract] tags with syn
+  contract.rs   reads the tests and #[impish::contract] tags in a file with syn
 ```
 
-`main` calls the commands; `check`, `mutate` and `regen` build on `code`, which
-resolves covers lines and builds on `contract` alone; `check` and `mutate` both
-build on `contract`, never on each other; `check` and `conditions` both build on `decisions`, which knows
-neither; `contract` does no I/O. Only the commands, and `code`, which reads
-source files, read or write files,
-run processes or print, and only `check` (`impish.toml`, `scope.toml`) and `decisions`
-(`decisions.toml`, `Cargo.lock`) read TOML. `main` prints
-one thing: the error that stopped a run, which exits 2 (undecided), not 1
-(not met).
+`main` calls `check`, which builds on `contract`; `contract` does no I/O. Only
+`check` reads files or prints. `main` prints one thing: the error that stopped
+a run, which exits 2 (undecided), not 1 (not met).
 
 `check` is static: it reads READMEs and parses test files, and never builds or
 runs a test. `cargo test` runs them, and the attribute ties the two together.
-([D3](contract/decisions.toml))
+([0003](docs/decisions/0003-check-is-static.md))
 
 ## impish (the attribute)
 
@@ -72,7 +44,7 @@ It makes the function a test, or goes beside a test attribute already there
 such as `#[test]` or `#[tokio::test]`, and checks each tag against
 `contract/<primitive>/README.md` while the test compiles, so a wrong tag is a
 compile error on that tag. It reports through `compile_error!`, never by
-printing or panicking. ([D2](contract/decisions.toml), [D10](contract/decisions.toml))
+printing or panicking. ([0002](docs/decisions/0002-tags-are-an-attribute-checked-at-compile-time.md), [0010](docs/decisions/0010-the-attribute-goes-beside-the-test-attribute.md))
 
 ## The Contract
 
@@ -80,14 +52,11 @@ impish holds its own Contract, in the layout it checks in other crates:
 
 ```
 contract/README.md               the format
-contract/<primitive>/README.md   purpose, obligations, covers and surface blocks
-contract/coverage.json           published coverage, rewritten by `check --write`;
-                                 `mutate --write` adds each mutate result
+contract/<primitive>/README.md   purpose and obligations
 tests/contract/<primitive>.rs    the tests that prove the obligations
 ```
 
-([D1](contract/decisions.toml),
-[D5](contract/decisions.toml))
+([0001](docs/decisions/0001-the-contract-is-markdown-blocks.md), [0012](docs/decisions/0012-impish-only-checks-that-every-obligation-has-a-test.md))
 
 ## Guardrails
 
@@ -100,21 +69,17 @@ merges itself (rule 27).
 | Format, Clippy | CI `lint` |
 | Tests, then `cargo impish check` on impish itself | CI `test` |
 | The suite on macOS and Windows | CI `portability` |
-| Architecture: the dependency directions and boundaries above, file size | `tests/architecture.rs` ([D8](contract/decisions.toml)) |
-| Size of the whole crate: primitives, files, lines, functions | `contract/scope.toml`, held by `cargo impish check` |
+| Architecture: the dependency directions and boundaries above, file size | `tests/architecture.rs` ([0008](docs/decisions/0008-architecture-rules-are-tests-not-obligations.md)) |
 | Dependency licences, sources and advisories | CI `deny`, `deny.toml`; nightly `audit.yml` |
 | Workflow security | CI `zizmor` |
 | No unused dependency | CI `lint`, `cargo machete` |
 | No copy-paste in scripts, workflows, Markdown or TOML | CI `lint`, jscpd (`.jscpd.json`) |
-| Every changed line is mutated, in four shards, and a survivor fails | CI `mutants` |
-| Impish's own `mutate --since --only-lines` holds each covered line a PR changes, one job per primitive (rule 20) | CI `contract-mutants` |
-| After a merge, plain `mutate --since` re-mutates all of each primitive whose Contract or tests changed | `contract-mutants.yml` |
+| Every changed line is mutated by cargo-mutants, in four shards, and a survivor fails | CI `mutants` |
 | No new near-duplicate functions | CI `similar`, `scripts/similar-code.sh` |
 | Existing near-duplicates become issues, one per cluster | nightly `similar-backlog.yml`, `scripts/similar-backlog.sh` |
-| A change to what ships (`scripts/shipped.sh`) bumps the version | CI `version` ([D6](contract/decisions.toml)) |
+| A change to what ships (`scripts/shipped.sh`) bumps the version | CI `version` ([0006](docs/decisions/0006-every-green-merge-is-a-release.md)) |
 | PR titles are `fix:` (with `bug`) or `refine:` (rule 9) | `pr-title.yml` |
-| Issues start from obligations: Refinement and Bug forms, no blank issues (rules 1, 20, 28) | `.github/ISSUE_TEMPLATE/` ([D9](contract/decisions.toml)) |
+| Issues start from obligations: Refinement and Bug forms, no blank issues (rules 1, 20, 28) | `.github/ISSUE_TEMPLATE/` ([0009](docs/decisions/0009-every-issue-starts-from-a-contract.md)) |
 | The gates' scripts work: each case fakes the slow tools and checks output and exit code; shellcheck; bash 3.2 | CI `lint`, `tests/pipeline/run.sh` |
-| Tests that catch nothing another test doesn't | nightly `kill-matrix.yml`, `scripts/kill-matrix.sh` ([D7](contract/decisions.toml)) |
 
 On `main`, the `Release` job publishes every new version.

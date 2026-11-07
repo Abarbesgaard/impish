@@ -2,7 +2,7 @@
 # Tests for the scripts and workflows that make up impish's CI pipeline. A gate
 # that can't fail passes every PR it should stop (Impatient Programming, rule
 # 24), so each case builds a throwaway git repo, fakes the slow tools
-# (similarity-rs, the kill matrix's cargo-mutants runs) and checks a script's
+# (similarity-rs, gh) and checks a script's
 # output and exit code. After Sara's tests/pipeline.
 #
 #   tests/pipeline/run.sh            # every case
@@ -55,9 +55,9 @@ workflows_run_with_pipefail() {
 # A mutation run takes minutes; a format slip shouldn't wait for one to be found.
 workflows_mutate_after_the_cheap_checks() {
   local needs want missing=""
-  needs=$(awk '$0 == "  contract-mutants:" { m = 1; next } m && /^  [a-z]/ { m = 0 } m && /^    needs:/ { print; exit }' "$root/.github/workflows/ci.yml")
+  needs=$(awk '$0 == "  mutants:" { m = 1; next } m && /^  [a-z]/ { m = 0 } m && /^    needs:/ { print; exit }' "$root/.github/workflows/ci.yml")
   for want in lint deny zizmor test similar version; do
-    case "$needs" in *"$want"*) ;; *) missing="$missing contract-mutants:$want" ;; esac
+    case "$needs" in *"$want"*) ;; *) missing="$missing mutants:$want" ;; esac
   done
   [ -z "$missing" ] || { bad "a mutation job doesn't need:$missing"; return; }
   ok
@@ -289,44 +289,7 @@ Similar code: src/lib.rs::j, src/lib.rs::k" ] || { bad "filed the wrong issues" 
   ok
 }
 
-# ── kill-matrix.sh ─────────────────────────────────────────────────────────
-
-# kill-matrix.sh's functions, without running its command line.
-kill_matrix_lib() { sed '/^case /,$d' "$root/scripts/kill-matrix.sh" > "$work/km-lib.sh"; }
-
-# m1 is killed by two tests, m2 by one of them; idle kills nothing.
-kill_matrix_report_marks_what_can_go() {
-  kill_matrix_lib
-  printf 'm1\tcontract/a\nm1\tcontract/b\nm2\tcontract/b\n' > "$work/matrix.tsv"
-  printf 'contract/a\ncontract/b\ncontract/idle\narchitecture/layers\n' > "$work/tests.txt"
-  local out rc suspects
-  # shellcheck disable=SC2016 # expands in the inner shell
-  out=$(KILLMX_OUT="$work/kmout" "$sh" -c 'source "$1"; report "$2" "$3" "$4"' _ \
-        "$work/km-lib.sh" "$work/matrix.tsv" "$work/tests.txt" "$work/suspects.tsv" 2>&1); rc=$?
-  expect_exit $rc 0 "$out" && expect_has "$out" "contract/a   <- removable" &&
-    expect_lacks "$out" "contract/b   <- removable" || return
-  suspects=$(cut -f1 "$work/suspects.tsv" | sort | tr '\n' ' ')
-  [ "$suspects" = "contract/a contract/idle " ] || { bad "suspects: '$suspects'"; return; }
-  ok
-}
-
-# Each test the kill matrix expects to kill nothing must still exist, or a
-# renamed one is filed as removable every night.
-kill_matrix_quiet_tests_exist() {
-  local re name target missing=""
-  re=$(sed -n "s/^no_kills_expected='\(.*\)'$/\1/p" "$root/scripts/kill-matrix.sh")
-  [ -n "$re" ] || { bad "no no_kills_expected in kill-matrix.sh"; return; }
-  for name in $(printf '%s' "$re" | tr -d '^()' | tr '|' '\n' | grep '\$$' | tr -d '$'); do
-    target=${name%%/*}
-    grep -rqE "fn ${name#*/}\(" "$root/tests/$target.rs" "$root/tests/$target" 2>/dev/null ||
-      missing="$missing $name"
-  done
-  [ -z "$missing" ] || { bad "no such test:$missing"; return; }
-  ok
-}
-
-cases=$(declare -F | awk '{ print $3 }' | grep -E '^(workflows|scripts|shipped|similar_code|kill_matrix)_' |
-  grep -vE '^(kill_matrix_lib)$')
+cases=$(declare -F | awk '{ print $3 }' | grep -E '^(workflows|scripts|shipped|similar_code)_')
 passed=0 failed=0
 for case in $cases; do
   case "$case" in *"$only"*) ;; *) continue ;; esac

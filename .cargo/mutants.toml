@@ -3,16 +3,10 @@
 # Contract tests live in the root package and also prove the impish crate.
 test_workspace = true
 
-# The timeout on a mutated test run only shows when a mutant hangs, and a
-# test that waits out a hang costs more than the check is worth.
-exclude_re = [
-    "replace \\* with / in mutate$",
-    "replace > with (==|>=) in Scratch::test$",
-    # A mutant's span never starts or ends on its block's brace, so a column
-    # off by one still lands in the same block.
-    "replace - with (\\+|/) in Reach::ran$",
-]
-
 # Run every test target against each mutant, not only up to the first that
 # fails, so mutants.out lists every test that catches it.
 additional_cargo_test_args = ["--no-fail-fast"]
+
+# The baseline runs from a warm cache, so the auto timeout can be ~20s, while a
+# mutant that breaks every README makes each contract test take its slow path.
+minimum_test_timeout = 120
