@@ -60,10 +60,7 @@ pub fn run(
         whole,
         write,
         json,
-        knobs: Knobs {
-            jobs: knobs.jobs.max(1),
-            ..knobs
-        },
+        knobs,
     };
     for name in &names {
         let ran = mutate(root, name, opts)?;
