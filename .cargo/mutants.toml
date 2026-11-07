@@ -6,3 +6,7 @@ test_workspace = true
 # Run every test target against each mutant, not only up to the first that
 # fails, so mutants.out lists every test that catches it.
 additional_cargo_test_args = ["--no-fail-fast"]
+
+# The baseline runs from a warm cache, so the auto timeout can be ~20s, while a
+# mutant that breaks every README makes each contract test take its slow path.
+minimum_test_timeout = 120
