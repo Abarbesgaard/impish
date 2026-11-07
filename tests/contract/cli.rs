@@ -35,16 +35,30 @@ fn a_run_that_cant_decide_exits_2() {
     assert_eq!(not_met.code, Some(1), "{}", not_met.stderr);
     assert!(not_met.stderr.ends_with(&format!("{NOT_MET}\n")));
 
-    let nothing = p.run(&["mutate", "calc"]);
-    assert_eq!(nothing.code, Some(2), "{}", nothing.stderr);
+    let p = Project::new();
+    p.write("contract/calc/README.md/x", "")
+        .write("tests/contract/calc.rs", "");
+    let unreadable = p.check();
+    assert_eq!(unreadable.code, Some(2), "{}", unreadable.stderr);
     assert!(
-        nothing.stderr.contains("nothing to mutate"),
+        unreadable.stderr.contains("contract/calc/README.md"),
         "{}",
-        nothing.stderr
+        unreadable.stderr
     );
+}
 
-    p.write("impish.toml", "surface = [");
-    let config = p.check();
-    assert_eq!(config.code, Some(2), "{}", config.stderr);
-    assert!(config.stderr.contains("impish.toml"), "{}", config.stderr);
+#[impish::contract("cli/A4")]
+fn check_is_the_one_command() {
+    let out = impish(&["--help"]);
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    let commands: Vec<&str> = text
+        .split("Commands:")
+        .nth(1)
+        .and_then(|rest| rest.split("\n\n").next())
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.split_whitespace().next())
+        .collect();
+    assert_eq!(commands, ["check", "help"], "{text}");
 }

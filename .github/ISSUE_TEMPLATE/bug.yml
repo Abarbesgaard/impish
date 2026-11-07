@@ -9,7 +9,7 @@ body:
         impish follows [Impatient Programming](https://impatientprogramming.org) (IMP). In IMP a bug means impish's [Contract](https://github.com/Abarbesgaard/impish/blob/main/contract/README.md) was missing something.
 
         - **What counts as a bug?** [Rule 9](https://impatientprogramming.org/rules/#rule-9): a defect in a released version, on [crates.io](https://crates.io/crates/cargo-impish) or under [releases](https://github.com/Abarbesgaard/impish/releases). Something only on `main` is a refinement; use the **Refinement** form.
-        - **How it's fixed.** [Rule 28](https://impatientprogramming.org/rules/#rule-28): the missing obligation goes into the Contract first, as a contract test that fails on the released code ([rule 20](https://impatientprogramming.org/rules/#rule-20)) and catches the mutant that matches the bug, which `cargo impish mutate` shows ([rule 26](https://impatientprogramming.org/rules/#rule-26)). Only then does the code change. Every bug leaves the Contract stronger.
+        - **How it's fixed.** [Rule 28](https://impatientprogramming.org/rules/#rule-28): the missing obligation goes into the Contract first, as a contract test that fails on the released code ([rule 20](https://impatientprogramming.org/rules/#rule-20)). Only then does the code change. Every bug leaves the Contract stronger.
 
         So below, besides what went wrong, say what impish should have promised.
   - type: input
@@ -24,8 +24,8 @@ body:
     id: toolchain
     attributes:
       label: Toolchain
-      description: The output of `cargo --version`, and of `cargo mutants --version` if this is about `cargo impish mutate`.
-      placeholder: cargo 1.98.0, cargo-mutants 27.1.0
+      description: The output of `cargo --version`.
+      placeholder: cargo 1.98.0
     validations:
       required: true
   - type: dropdown
@@ -51,12 +51,11 @@ body:
       label: Primitive
       description: |
         Which part of impish went wrong? Each primitive is a folder under [contract/](https://github.com/Abarbesgaard/impish/tree/main/contract):
-        `attribute` is `#[impish::contract]` (a compile error, or a test that doesn't run), `check` is `cargo impish check`, `cli` is how impish is invoked, `mutate` is `cargo impish mutate`.
+        `attribute` is `#[impish::contract]` (a compile error, or a test that doesn't run), `check` is `cargo impish check`, `cli` is how impish is invoked.
       options:
         - attribute
         - check
         - cli
-        - mutate
         - None yet
         - Not sure
     validations:
@@ -66,7 +65,7 @@ body:
     attributes:
       label: Steps to reproduce
       description: |
-        The smallest crate that shows it, from `cargo new --lib repro`: the contents of `contract/<primitive>/README.md`, `tests/contract/main.rs` and `tests/contract/<primitive>.rs`, and any `impish.toml`, then the exact commands. A gist or repository link works too.
+        The smallest crate that shows it, from `cargo new --lib repro`: the contents of `contract/<primitive>/README.md`, `tests/contract/main.rs` and `tests/contract/<primitive>.rs`, then the exact commands. A gist or repository link works too.
       placeholder: |
         cargo new --lib repro && cd repro
         cargo add --dev impish

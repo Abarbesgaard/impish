@@ -16,11 +16,13 @@ How impish is run. Cargo runs `cargo impish <args>` as
 - **status:** active
 
 ### A3 — A run that can't decide exits 2
-- **must:** exit 2, saying why, when impish can't tell whether the Contract holds, such as no `contract/` directory, an unreadable `impish.toml`, contract tests that don't build or are red before mutating, or nothing to mutate; and exit 1 only when the Contract isn't met
-- **why:** CI must tell "the tests are weak" from "the run is broken", as flinch does (#29)
+- **must:** exit 2, saying why, when impish can't tell whether the Contract holds, such as no `contract/` directory in the current one or above it, or a README or test file that exists but can't be read; and exit 1 only when the Contract isn't met
+- **why:** CI must tell "the Contract isn't met" from "the run is broken"
 - **kind:** functional
 - **status:** active
 
-```covers
-src/main.rs::main
-```
+### A4 — check is the one command
+- **must:** list `check` as the only command in `--help`
+- **why:** impish answers one question; mutation is cargo-mutants' job (#110)
+- **kind:** functional
+- **status:** active

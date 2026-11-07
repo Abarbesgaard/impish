@@ -53,14 +53,6 @@ impl Project {
         self.run_in(sub, &["check"])
     }
 
-    pub fn run(&self, args: &[&str]) -> Checked {
-        self.run_in(".", args)
-    }
-
-    pub fn path(&self) -> &Path {
-        self.0.path()
-    }
-
     /// Every file in the project, by path, with its bytes.
     pub fn files(&self) -> BTreeMap<PathBuf, Vec<u8>> {
         fn walk(dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
@@ -76,21 +68,6 @@ impl Project {
         let mut out = BTreeMap::new();
         walk(self.0.path(), &mut out);
         out
-    }
-
-    /// Sets every file's modification time to `when`.
-    pub fn age(&self, when: std::time::SystemTime) {
-        for path in self.files().keys() {
-            fs::File::options()
-                .write(true)
-                .open(self.0.path().join(path))
-                .and_then(|f| f.set_modified(when))
-                .unwrap();
-        }
-    }
-
-    pub fn read(&self, rel: &str) -> String {
-        fs::read_to_string(self.0.path().join(rel)).unwrap()
     }
 
     fn run_in(&self, sub: &str, args: &[&str]) -> Checked {
@@ -201,107 +178,6 @@ impl Crate {
             status: out.status,
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-        }
-    }
-}
-
-/// A throwaway crate with a `calc` primitive, for `cargo impish mutate`:
-/// `src/lib.rs` defines `add` and `double`, which the README covers, and
-/// `negate`, which it doesn't, and
-/// `tests/contract/calc.rs` holds `tests`. Builds share a target directory,
-/// under a package name of their own.
-pub fn calc_crate(tests: &str) -> Project {
-    let p = Project::new();
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    // Mutate builds share a target directory, and tests run in parallel: two
-    // fixtures with one package name would build over each other's mutants.
-    let mut hasher = DefaultHasher::new();
-    p.path().hash(&mut hasher);
-    let manifest = format!(
-        "[package]\nname = \"calc{:x}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
-         [lib]\nname = \"calc\"\n\n[dev-dependencies]\nimpish = {{ path = {:?} }}\n",
-        hasher.finish(),
-        root.join("impish")
-    );
-    let readme = readme(&["A1", "A2"]) + "```covers\nsrc/lib.rs::add\nsrc/lib.rs::double\n```\n";
-    p.write("Cargo.toml", &manifest)
-        .write(
-            "Cargo.lock",
-            &fs::read_to_string(root.join("Cargo.lock")).unwrap(),
-        )
-        .write(
-            "src/lib.rs",
-            "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n\n\
-             pub fn double(a: i32) -> i32 {\n    a * 2\n}\n\n\
-             pub fn negate(a: i32) -> i32 {\n    -a\n}\n",
-        )
-        .write("contract/calc/README.md", &readme)
-        .write("tests/contract/main.rs", "mod calc;\n")
-        .write("tests/contract/calc.rs", tests);
-    p
-}
-
-impl Project {
-    /// Commits every file, starting a git repository if there is none.
-    pub fn commit(&self) {
-        for args in [
-            &["init", "-q"][..],
-            &["add", "-A"],
-            &[
-                "-c",
-                "user.name=t",
-                "-c",
-                "user.email=t@t",
-                "commit",
-                "-qm",
-                "c",
-            ],
-        ] {
-            let ok = Command::new("git")
-                .args(args)
-                .current_dir(self.path())
-                .status()
-                .unwrap()
-                .success();
-            assert!(ok, "git {args:?}");
-        }
-    }
-
-    pub fn mutate(&self, primitive: &str) -> Checked {
-        self.mutate_with(primitive, &[])
-    }
-
-    pub fn mutate_with(&self, primitive: &str, args: &[&str]) -> Checked {
-        self.mutate_args(&[&[primitive], args].concat())
-    }
-
-    /// `cargo impish mutate` with `args`, which may name no primitive, two
-    /// mutants at a time unless `args` say otherwise: tests already run at
-    /// once, and each extra copy builds its own target directory.
-    pub fn mutate_args(&self, args: &[&str]) -> Checked {
-        if args.iter().any(|a| a.starts_with("-j") || *a == "--jobs") {
-            return self.mutate_any_jobs(args);
-        }
-        self.mutate_any_jobs(&[args, &["-j", "2"]].concat())
-    }
-
-    /// `cargo impish mutate` with exactly `args`.
-    pub fn mutate_any_jobs(&self, args: &[&str]) -> Checked {
-        let out = Command::new(env!("CARGO_BIN_EXE_cargo-impish"))
-            .arg("mutate")
-            .args(args)
-            .current_dir(self.0.path())
-            .env(
-                "CARGO_TARGET_DIR",
-                concat!(env!("CARGO_TARGET_TMPDIR"), "/fixtures"),
-            )
-            .env_remove("RUSTFLAGS")
-            .output()
-            .expect("run cargo-impish mutate");
-        Checked {
-            code: out.status.code(),
-            stdout: String::from_utf8(out.stdout).unwrap(),
-            stderr: String::from_utf8(out.stderr).unwrap(),
         }
     }
 }

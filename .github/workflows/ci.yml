@@ -8,10 +8,10 @@ name: CI
 #   Format and Clippy ──┐
 #   Dependency policy ──┤
 #   Workflow security ──┤
-#   Similar code (PRs) ─┼── Contract mutants (PRs) ─┬─ CI ── Release (main, new version)
-#   Version (PRs) ──────┤                           │
-#   Test ───────────────┘                           │
-#   Portability ────────────────────────────────────┘
+#   Similar code (PRs) ─┼── Mutants (PRs) ─┬─ CI ── Release (main, new version)
+#   Version (PRs) ──────┤                  │
+#   Test ───────────────┘                  │
+#   Portability ───────────────────────────┘
 #
 # Format and Clippy: fmt, clippy, unused dependencies, copy-paste outside Rust
 #                    (jscpd, .jscpd.json), and the pipeline's own scripts
@@ -20,14 +20,11 @@ name: CI
 # Workflow security: zizmor on these workflows.
 # Similar code:      no new near-duplicate functions (scripts/similar-code.sh).
 # Version:           a change to what ships bumps the version (scripts/shipped.sh).
-# Test:              the suite, then `cargo impish check` and
-#                    `cargo impish conditions` on impish itself.
+# Test:              the suite, then `cargo impish check` on impish itself.
 # Portability:       the suite on macOS and Windows; on macOS, the pipeline's
 #                    scripts under its bash 3.2 too.
-# Contract mutants:  impish's own `mutate --since --only-lines`, built from the
-#                    PR, one job per primitive (rule 20). impish is mutated
-#                    once, here; nothing re-mutates after the merge,
-#                    and code no Contract covers isn't mutated (#97).
+# Mutants:           every line the PR changes is mutated by cargo-mutants,
+#                    in four shards; a survivor fails.
 # Release:           publishes the crates and a GitHub release for a new version.
 on:
   push:
@@ -97,35 +94,11 @@ jobs:
         with:
           key: mutants
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # The mutate contract tests run cargo-mutants.
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
-        with:
-          tool: cargo-mutants
       - run: cargo test
       # impish holds its own Contract (rule 20).
       - run: cargo run --quiet -- check
-      # Its decision records still hold (contract/decisions.toml).
-      - run: cargo run --quiet -- conditions
-      - name: Contract coverage
-        run: |
-          {
-            echo "## Contract coverage"
-            jq -r '
-              (if .surface then "**Surface covered: \(.surface.percent)%** (\(.surface.covered) of \(.surface.total))\n" else "" end),
-              "**Active obligations: \(.obligations)**\n",
-              "| Primitive | Obligations | Surface |",
-              "|---|---|---|",
-              (.primitives | to_entries[] | "| \(.key) | \(.value.obligations) | \(.value.surface | join(", ")) |"),
-              "",
-              "| Kind | Obligations |",
-              "|---|---|",
-              (.kinds | to_entries[] | "| \(.key) | \(.value) |"),
-              (if (.uncovered // []) | length > 0 then "\n**Not yet in the Contract:** \(.uncovered | join(", "))" else empty end)
-            ' contract/coverage.json
-          } >> "$GITHUB_STEP_SUMMARY"
 
-  # #38 (a stale mutant build) happened only on macOS, and users run impish
-  # on macOS and Windows too.
+  # Users run impish on macOS and Windows too.
   portability:
     name: Portability (${{ matrix.os }})
     strategy:
@@ -144,9 +117,6 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
-        with:
-          tool: cargo-mutants
       - run: cargo test
       # The Lint job runs shellcheck; this checks the scripts run on bash 3.2.
       - name: Pipeline scripts under /bin/bash
@@ -187,20 +157,49 @@ jobs:
           annotations: true
           min-severity: low
 
-  # Hold impish to its own Contract (rule 20): the PR's build runs
-  # `cargo impish mutate --since --only-lines` on impish, one job per
-  # primitive, so every covered line the PR changes must still be met.
-  contract-mutants:
-    name: Contract mutants
+  # Every test must prove it's worth keeping (rule 26): each line a PR changes
+  # is mutated, and a mutant no test catches fails the PR.
+  # Four shards, each its own runner, so a large diff doesn't queue its
+  # mutants behind one another.
+  mutants:
+    name: Mutants (PR diff, ${{ matrix.shard }}/4)
     # The cheap checks first: a format slip shouldn't cost a mutation run.
     needs: [lint, deny, zizmor, test, similar, version]
     if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     permissions:
       contents: read
-    uses: $/.github/workflows/contract-mutants.yml
-    with:
-      since: origin/${{ github.base_ref }}
-      only-lines: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Diff against base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git diff "origin/${BASE_REF}.." | tee git.diff
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: mutants
+          # Never runs on main: Test saves this key there.
+          save-if: false
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: cargo-mutants
+      - env:
+          SHARD: ${{ matrix.shard }}
+        run: cargo mutants --workspace --no-shuffle -vV --in-place --in-diff git.diff --shard "${SHARD}/4"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mutants.out-${{ matrix.shard }}
+          path: mutants.out
 
   # The exhale of rule 12: a function this PR adds or edits that looks like
   # another one fails, unless the pair is on the base already or declared in
@@ -277,7 +276,7 @@ jobs:
   # let a failure through; this one fails if anything failed or was cancelled.
   ci:
     name: CI
-    needs: [lint, test, portability, deny, zizmor, contract-mutants, similar, version]
+    needs: [lint, test, portability, deny, zizmor, mutants, similar, version]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -339,9 +338,10 @@ jobs:
           publish impish
           # cargo-impish's tests use impish from crates.io. Packaging it turns
           # the path to impish-core into a crates.io one, which clashes with
-          # the impish-core an older impish locks, so move to the new one.
+          # the impish-core an older impish of the same minor version locks,
+          # so move to the new one. Another minor version locks its own.
           old=$(awk '$0 == "name = \"impish\"" { getline v; getline s; if (s ~ /registry/) { gsub(/version = |"/, "", v); print v } }' Cargo.lock)
-          if [ "$old" != "$version" ]; then
+          if [ "$old" != "$version" ] && [ "${old%.*}" = "${version%.*}" ]; then
             cargo update -p "impish@$old" --precise "$version"
           fi
           # That update is the one change to the checkout.

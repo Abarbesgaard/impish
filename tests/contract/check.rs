@@ -1,4 +1,4 @@
-use crate::harness::{NOT_MET, Project, calc, calc_crate, readme, test_fn};
+use crate::harness::{NOT_MET, Project, calc, readme, test_fn};
 
 #[impish::contract("check/A1")]
 fn a_held_contract_passes_and_says_what_it_checked() {
@@ -20,10 +20,7 @@ fn a_held_contract_passes_and_says_what_it_checked() {
         .write("tests/contract/sum.rs", &sum.join("\n"));
     let out = p.check();
     assert_eq!(out.code, Some(0), "{}", out.stderr);
-    assert_eq!(
-        out.stdout.trim(),
-        "The Contract holds: 4 obligations across 2 primitives."
-    );
+    assert_eq!(out.stdout.trim(), "2 primitives, 4 obligations, all tested");
 }
 
 #[impish::contract("check/A2")]
@@ -62,7 +59,7 @@ fn a_tag_the_primitive_doesnt_declare_fails_by_name() {
     }
 }
 
-#[impish::contract("check/A5", "check/A14", "check/A16")]
+#[impish::contract("check/A5")]
 fn a_malformed_obligation_list_fails_with_file_and_line() {
     let text = [
         "# calc",
@@ -80,7 +77,7 @@ fn a_malformed_obligation_list_fails_with_file_and_line() {
         "- **status:** done",
         "- **why:**",
         "### A2 - Again",
-        "- **must:** again",
+        "- **kind:** functional",
         "### A3 — Fine",
         "- **must:** hold",
         "- **why:** ```not a fence```",
@@ -104,14 +101,13 @@ fn a_malformed_obligation_list_fails_with_file_and_line() {
         format!("{f}:6: malformed obligation heading `### A1`"),
         format!("{f}:7: malformed obligation heading `### Ax - Adds`"),
         format!(
-            "{f}:8: A2 has kind `fast`, not one of functional, non-functional, persisted-format, ordering, security, exception"
+            "{f}:8: A2 has kind `fast`, not one of functional, non-functional, persisted-format, ordering, security"
         ),
         format!("{f}:8: A2 has status `done`, not active or retired"),
         format!("{f}:10: `must` is given twice"),
         format!("{f}:11: unknown field `scope`"),
         format!("{f}:14: `- **why:**` is not part of an obligation block"),
-        format!("{f}:15: A2 has no `kind`"),
-        format!("{f}:15: A2 has no `status`"),
+        format!("{f}:15: A2 has no `must`"),
         format!("{f}:15: A2 is declared twice"),
         format!("{f}:27: an obligation outside ## Obligations"),
         format!("{f}:28: an obligation outside ## Obligations"),
@@ -135,46 +131,32 @@ fn a_readme_without_obligations_fails() {
     }
 }
 
-#[impish::contract("check/A15")]
+#[impish::contract("check/A4")]
 fn retired_obligations_need_no_test_and_take_no_tags() {
     let text = [
         "## Obligations",
         "### A1 — Adds",
         "- **must:** add",
-        "- **kind:** functional",
-        "- **status:** active",
         "### A2 — Subtracts",
         "- **must:** subtract",
         "- **kind:** non-functional",
         "- **status:** retired",
-        "### A3 — Proven elsewhere",
-        "- **must:** hold",
-        "- **kind:** exception",
-        "- **target:** src/lib.rs",
-        "- **status:** active",
     ]
     .join("\n");
     let p = calc(&[], &test_fn("adds", &["calc/A1"]));
-    p.write("contract/calc/README.md", &text)
-        .write("src/lib.rs", "");
+    p.write("contract/calc/README.md", &text);
     let out = p.check();
     assert_eq!(out.code, Some(0), "{}", out.stderr);
-    assert_eq!(
-        out.stdout.trim(),
-        "The Contract holds: 1 obligations across 1 primitives."
-    );
+    assert_eq!(out.stdout.trim(), "1 primitives, 1 obligations, all tested");
     p.write(
         "tests/contract/calc.rs",
-        &test_fn("adds", &["calc/A1, calc/A2, calc/A3"]),
+        &test_fn("adds", &["calc/A1, calc/A2"]),
     );
     let out = p.check();
     assert_eq!(out.code, Some(1));
     assert_eq!(
         out.stderr,
-        format!(
-            "calc::adds names `calc/A2`, which is retired\n\
-             calc::adds names `calc/A3`, which is an exception\n{NOT_MET}\n"
-        )
+        format!("calc::adds names `calc/A2`, which is retired\n{NOT_MET}\n")
     );
 }
 
@@ -228,17 +210,7 @@ fn every_problem_is_reported() {
     );
 }
 
-fn with_covers(lines: &str) -> Project {
-    let p = calc(&[], &test_fn("adds", &["calc/A1"]));
-    let covers = format!("{}\n```covers\n{lines}```\n", readme(&["A1"]));
-    p.write("contract/calc/README.md", &covers).write(
-        "src/calc.rs",
-        "pub fn add(a: u8) -> u8 { a }\npub fn add_one() {}\npub fn parse<T>() {}\n",
-    );
-    p
-}
-
-#[impish::contract("check/A10")]
+#[impish::contract("check/A9")]
 fn ignored_tests_prove_nothing() {
     let tests = [
         "#[impish::contract(\"calc/A1\")]",
@@ -264,7 +236,7 @@ fn ignored_tests_prove_nothing() {
     );
 }
 
-#[impish::contract("check/A11")]
+#[impish::contract("check/A10")]
 fn a_tag_outside_a_primitive_test_file_fails() {
     let p = calc(&["A1"], &test_fn("adds", &["calc/A1"]));
     let attr = "#[impish::contract(\"calc/A1\")]";
@@ -300,26 +272,7 @@ fn a_tag_outside_a_primitive_test_file_fails() {
     );
 }
 
-#[impish::contract("check/A22")]
-fn every_covers_and_surface_block_counts() {
-    let p = with_covers("src/calc.rs::add\n");
-    let readme = p.read("contract/calc/README.md")
-        + "\n```surface\ncli add\n```\n\n```covers\nsrc/calc.rs::sub\n```\n\n```surface\ncli\n```\n";
-    p.write("contract/calc/README.md", &readme);
-    let out = p.check();
-    assert_eq!(out.code, Some(1));
-    let file = "contract/calc/README.md";
-    assert_eq!(
-        out.stderr,
-        format!(
-            "{file}: covers `src/calc.rs::sub`, which doesn't exist\n\
-             {file}: surface line `cli` is not <kind> <name>\n\
-             {NOT_MET}\n"
-        )
-    );
-}
-
-#[impish::contract("check/A23")]
+#[impish::contract("check/A3")]
 fn a_test_outside_a_primitive_test_file_fails() {
     let p = calc(&["A1"], &test_fn("adds", &["calc/A1"]));
     p.write(
@@ -350,162 +303,7 @@ fn a_test_outside_a_primitive_test_file_fails() {
     );
 }
 
-fn with_surface(lines: &str) -> Project {
-    let p = calc(&[], &test_fn("adds", &["calc/A1"]));
-    let surface = format!("{}\n```surface\n{lines}```\n", readme(&["A1"]));
-    p.write("contract/calc/README.md", &surface);
-    p
-}
-
-const LISTS_ADD_AND_FIND: &str =
-    "[surface]\ncommand = [\"sh\", \"-c\", \"printf 'cli add\\\\n\\\\n  mcp find  \\\\n'\"]\n";
-
-#[impish::contract("check/A12")]
-fn surface_lines_must_be_kind_and_name() {
-    let out = with_surface("cli add\n\nmcp find\n").check();
-    assert_eq!(out.code, Some(0), "{}", out.stderr);
-    let out = with_surface("cli\ncli two words\ncli add\n").check();
-    assert_eq!(out.code, Some(1));
-    let file = "contract/calc/README.md";
-    assert_eq!(
-        out.stderr,
-        format!(
-            "{file}: surface line `cli` is not <kind> <name>\n\
-             {file}: surface line `cli two words` is not <kind> <name>\n\
-             {NOT_MET}\n"
-        )
-    );
-}
-
-#[impish::contract("check/A13")]
-fn surface_lines_the_command_prints_hold() {
-    let p = with_surface("cli add\nmcp find\n");
-    p.write("impish.toml", LISTS_ADD_AND_FIND);
-    let out = p.check();
-    assert_eq!(out.code, Some(0), "{}", out.stderr);
-}
-
-#[impish::contract("check/A13")]
-fn a_surface_line_the_command_doesnt_print_fails() {
-    let p = with_surface("cli add\nmcp add\ncli nope\n");
-    p.write("impish.toml", LISTS_ADD_AND_FIND);
-    let out = p.check();
-    assert_eq!(out.code, Some(1));
-    let file = "contract/calc/README.md";
-    assert_eq!(
-        out.stderr,
-        format!(
-            "{file}: surface `mcp add` is not in the surface command's output\n\
-             {file}: surface `cli nope` is not in the surface command's output\n\
-             {NOT_MET}\n"
-        )
-    );
-}
-
-#[impish::contract("check/A13")]
-fn a_failing_surface_command_fails_check() {
-    let p = with_surface("cli add\n");
-    p.write(
-        "impish.toml",
-        "[surface]\ncommand = [\"sh\", \"-c\", \"echo broken >&2; exit 3\"]\n",
-    );
-    let out = p.check();
-    assert_eq!(out.code, Some(2));
-    assert!(out.stderr.contains("surface command"), "{}", out.stderr);
-    assert!(out.stderr.contains("broken"), "{}", out.stderr);
-}
-
-fn block(id: &str, kind: &str, status: &str) -> String {
-    format!("### {id} — A promise\n- **must:** hold\n- **kind:** {kind}\n- **status:** {status}\n")
-}
-
-/// calc: two active obligations and a retired one, surface `cli add`; sum:
-/// one obligation, surface `cli add` and `mcp find`.
-fn covered() -> Project {
-    let calc = [
-        "## Obligations".to_string(),
-        block("A1", "functional", "active"),
-        block("A2", "security", "active"),
-        block("A3", "ordering", "retired"),
-        "```surface\ncli add\n```\n".to_string(),
-    ];
-    let p = calc_with(&calc.join("\n"), &test_fn("adds", &["calc/A1, calc/A2"]));
-    let sum = format!("{}\n```surface\ncli add\nmcp find\n```\n", readme(&["A1"]));
-    p.write("contract/sum/README.md", &sum)
-        .write("tests/contract/sum.rs", &test_fn("sums", &["sum/A1"]));
-    p
-}
-
-fn calc_with(text: &str, tests: &str) -> Project {
-    let p = calc(&[], tests);
-    p.write("contract/calc/README.md", text);
-    p
-}
-
-fn coverage(p: &Project) -> serde_json::Value {
-    serde_json::from_str(&p.read("contract/coverage.json")).unwrap()
-}
-
-#[impish::contract("check/A17")]
-fn write_publishes_coverage() {
-    let p = covered();
-    let out = p.run(&["check", "--write"]);
-    assert_eq!(out.code, Some(0), "{}", out.stderr);
-    assert_eq!(
-        coverage(&p),
-        serde_json::json!({
-            "obligations": 3,
-            "kinds": {"functional": 2, "security": 1},
-            "primitives": {
-                "calc": {"obligations": 2, "surface": ["cli add"]},
-                "sum": {"obligations": 1, "surface": ["cli add", "mcp find"]},
-            },
-        })
-    );
-    assert!(p.read("contract/coverage.json").ends_with("}\n"));
-}
-
-#[impish::contract("check/A17")]
-fn write_publishes_surface_coverage_with_a_surface_command() {
-    let p = covered();
-    p.write(
-        "impish.toml",
-        "[surface]\ncommand = [\"printf\", \"cli add\\\\nmcp find\\\\ncli del\\\\n\"]\n",
-    );
-    let out = p.run(&["check", "--write"]);
-    assert_eq!(out.code, Some(0), "{}", out.stderr);
-    let coverage = coverage(&p);
-    assert_eq!(
-        coverage["surface"],
-        serde_json::json!({"covered": 2, "total": 3, "percent": 66.7})
-    );
-    assert_eq!(coverage["uncovered"], serde_json::json!(["cli del"]));
-}
-
-#[impish::contract("check/A18")]
-fn stale_coverage_fails_until_rewritten() {
-    let p = covered();
-    assert_eq!(p.run(&["check", "--write"]).code, Some(0));
-    assert_eq!(p.check().code, Some(0));
-    p.write(
-        "tests/contract/sum.rs",
-        &test_fn("sums", &["sum/A1, sum/A2"]),
-    )
-    .write("contract/sum/README.md", &readme(&["A1", "A2"]));
-    let out = p.check();
-    assert_eq!(out.code, Some(1));
-    assert_eq!(
-        out.stderr,
-        format!(
-            "contract/coverage.json is out of date; run `cargo impish check --write`\n{NOT_MET}\n"
-        )
-    );
-    assert_eq!(p.run(&["check", "--write"]).code, Some(0));
-    assert_eq!(p.check().code, Some(0));
-    assert_eq!(coverage(&p)["obligations"], 4);
-}
-
-#[impish::contract("check/A19")]
+#[impish::contract("check/A11")]
 fn a_test_file_that_isnt_rust_fails() {
     let p = calc(&["A1"], "\n#[impish::contract(\"calc/A1\")]\nfn adds( {}\n");
     let out = p.check();
@@ -520,109 +318,14 @@ fn a_test_file_that_isnt_rust_fails() {
     assert_eq!(lines[1], NOT_MET);
 }
 
-#[impish::contract("check/A20")]
-fn covers_outside_the_crate_fail() {
-    let p = with_covers("src/calc.rs::add\n");
-    let absolute = format!("{}::add", p.path().join("src/calc.rs").display());
-    let lines = ["src/../src/calc.rs::add", &absolute, "../calc.rs::add"];
-    p.write(
-        "contract/calc/README.md",
-        &format!(
-            "{}\n```covers\n{}\nsrc/calc.rs::add\n```\n",
-            readme(&["A1"]),
-            lines.join("\n")
-        ),
-    );
-    let out = p.check();
-    assert_eq!(out.code, Some(1));
-    let file = "contract/calc/README.md";
-    let expected: String = lines
-        .iter()
-        .map(|l| format!("{file}: covers `{l}`, which is outside the crate\n"))
-        .collect();
-    assert_eq!(out.stderr, format!("{expected}{NOT_MET}\n"));
-}
-
-#[impish::contract("check/A21")]
-fn check_leaves_the_crate_as_it_was() {
-    let p = covered();
+#[impish::contract("check/A12")]
+fn check_leaves_the_project_as_it_was() {
+    let p = calc(&["A1"], &test_fn("adds", &["calc/A1"]));
     let before = p.files();
     assert_eq!(p.check().code, Some(0));
-    assert_eq!(p.files(), before, "check wrote coverage without --write");
-    assert_eq!(p.run(&["check", "--write"]).code, Some(0));
-    p.write("contract/sum/README.md", &readme(&["A1", "A2"]));
+    assert_eq!(p.files(), before, "a passing check changed the project");
+    p.write("contract/calc/README.md", &readme(&["A1", "A2"]));
     let before = p.files();
     assert_eq!(p.check().code, Some(1));
-    assert_eq!(p.files(), before, "a failing check changed the crate");
-}
-
-#[impish::contract("check/A24")]
-fn json_reports_what_the_text_does() {
-    let p = calc(&["A1", "A2"], &test_fn("adds", &["calc/A1"]));
-
-    let out = p.run(&["check", "--format", "json"]);
-
-    assert_eq!(out.code, Some(1), "{}", out.stdout);
-    assert_eq!(out.stderr, "");
-    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
-    assert_eq!(doc["version"], 1);
-    assert_eq!(doc["met"], false);
-    assert_eq!(doc["obligations"], 2);
-    assert_eq!(doc["primitives"], 1);
-    assert_eq!(doc["problems"], serde_json::json!(["calc/A2 has no test"]));
-    assert_eq!(doc["coverage"]["primitives"]["calc"]["obligations"], 2);
-
-    p.write(
-        "tests/contract/calc.rs",
-        &test_fn("adds", &["calc/A1", "calc/A2"]),
-    );
-    let out = p.run(&["check", "--format", "json"]);
-    assert_eq!(out.code, Some(0), "{}", out.stdout);
-    let doc: serde_json::Value = serde_json::from_str(&out.stdout).expect("one JSON document");
-    assert_eq!(doc["met"], true);
-    assert_eq!(doc["problems"], serde_json::json!([]));
-}
-
-#[impish::contract("check/A25")]
-fn a_stale_mutate_result_fails() {
-    let p = calc_crate(&test_fn("adds", &["calc/A1, calc/A2"]));
-    assert_eq!(p.check().code, Some(0));
-    p.mutate_with("calc", &["--write"]);
-    let result = |p: &Project| {
-        let doc: serde_json::Value =
-            serde_json::from_str(&p.read("contract/coverage.json")).unwrap();
-        doc["primitives"]["calc"]["mutate"].clone()
-    };
-    let recorded = result(&p);
-    assert!(recorded["fingerprint"].is_string(), "{recorded}");
-    let out = p.run(&["check", "--write"]);
-    assert_eq!(out.code, Some(0), "{}", out.stderr);
-    assert_eq!(result(&p), recorded, "--write dropped the result");
-
-    let stale = format!(
-        "contract/coverage.json: the mutate result for calc is stale; \
-         run `cargo impish mutate calc --write`\n{NOT_MET}\n"
-    );
-    for file in [
-        "src/lib.rs",
-        "tests/contract/calc.rs",
-        "contract/calc/README.md",
-    ] {
-        let before = p.read(file);
-        p.write(file, &format!("{before}\n"));
-        let out = p.check();
-        assert_eq!((out.code, out.stderr), (Some(1), stale.clone()), "{file}");
-        p.write(file, &before);
-        assert_eq!(p.check().code, Some(0), "{file}");
-    }
-    p.write("contract/calc/mutants.md", "# Mutants calc leaves alone\n");
-    assert_eq!(p.check().stderr, stale);
-    std::fs::remove_file(p.path().join("contract/calc/mutants.md")).unwrap();
-    p.write("src/other.rs", "pub fn other() {}\n");
-    let out = p.check();
-    assert!(
-        !out.stderr.contains("stale"),
-        "an uncovered file made it stale: {}",
-        out.stderr
-    );
+    assert_eq!(p.files(), before, "a failing check changed the project");
 }

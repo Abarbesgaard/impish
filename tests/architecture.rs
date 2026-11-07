@@ -6,10 +6,7 @@
 //!
 //!   core/src     impish-core: the Contract's README format, pure
 //!   impish/src   #[impish::contract]: the attribute, on top of core
-//!   src          cargo-impish: main → {check, mutate} → contract, on top of core;
-//!                main → conditions → decisions, and check → decisions;
-//!                main → regen → contract;
-//!                mutate's scratch copy lives in src/mutate/
+//!   src          cargo-impish: main → check → contract, on top of core
 
 use archunit::{
     Checkable, FileInfo, ResultFactory, Violation, assert_passes, pattern, project_files,
@@ -47,39 +44,18 @@ fn uses_any(f: &FileInfo, needles: &[&str]) -> bool {
 
 #[test]
 fn binary_layers_depend_inwards() {
-    // check, mutate and conditions are the commands; they share the Contract's
-    // reading, not each other.
+    // check reads files and reports; contract parses what check read.
     let rule = project_layers()
         .layer("main")
         .defined_by("src/main.rs")
         .layer("check")
         .defined_by("src/check**")
-        .layer("conditions")
-        .defined_by("src/conditions.rs")
-        .layer("decisions")
-        .defined_by("src/decisions**")
-        .layer("mutate")
-        .defined_by("src/mutate**")
-        .layer("regen")
-        .defined_by("src/regen**")
-        .layer("code")
-        .defined_by("src/code.rs")
         .layer("contract")
         .defined_by("src/contract.rs")
         .where_layer("contract")
         .may_only_depend_on_layers(&[])
-        .where_layer("decisions")
-        .may_only_depend_on_layers(&[])
-        .where_layer("conditions")
-        .may_only_depend_on_layers(&["decisions"])
-        .where_layer("code")
-        .may_only_depend_on_layers(&["contract"])
         .where_layer("check")
-        .may_only_depend_on_layers(&["code", "contract", "decisions"])
-        .where_layer("mutate")
-        .may_only_depend_on_layers(&["code", "contract"])
-        .where_layer("regen")
-        .may_only_depend_on_layers(&["code", "contract"]);
+        .may_only_depend_on_layers(&["contract"]);
 
     assert_passes!(rule);
 }
@@ -160,43 +136,9 @@ fn only_main_parses_the_command_line() {
 }
 
 #[test]
-fn only_check_and_decisions_read_toml() {
-    // check reads impish.toml and scope.toml; decisions reads decisions.toml
-    // and Cargo.lock.
+fn only_check_reports() {
     let rule = project_files()
-        .in_path(
-            pattern("src/**")
-                .except_in_path("src/check**")
-                .except_in_path("src/decisions**"),
-        )
-        .should_not()
-        .depend_on_external_modules()
-        .matching("toml");
-
-    assert_passes!(rule);
-}
-
-#[test]
-fn only_commands_serialise_and_report() {
-    let rule = project_files()
-        .in_path(
-            pattern("src/**")
-                .except_in_path("src/check.rs")
-                .except_in_path("src/mutate.rs")
-                .except_in_path("src/mutate/**"),
-        )
-        .should_not()
-        .depend_on_external_modules()
-        .matching("serde")
-        .matching("serde_json");
-    let no_print = project_files()
-        .in_path(
-            pattern("src/**")
-                .except_in_path("src/check.rs")
-                .except_in_path("src/conditions.rs")
-                .except_in_path("src/mutate.rs")
-                .except_in_path("src/regen.rs"),
-        )
+        .in_path(pattern("src/**").except_in_path("src/check.rs"))
         .should()
         .adhere_to(
             |f: &FileInfo| {
@@ -208,12 +150,11 @@ fn only_commands_serialise_and_report() {
                     })
                     .all(|l| f.path.ends_with("src/main.rs") && l == UNDECIDED)
             },
-            "not print (the commands, src/check.rs, src/conditions.rs, \
-             src/mutate.rs and src/regen.rs, report; \
+            "not print (src/check.rs reports; \
              main prints only the error that stopped a run)",
         );
 
-    assert_all_pass(&[&rule, &no_print]);
+    assert_passes!(rule);
 }
 
 #[test]

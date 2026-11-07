@@ -9,27 +9,28 @@ exit code is 2 (cli/A3).
 ## Obligations
 
 ### A1 — A held Contract passes
-- **must:** when every obligation is proved, say how many obligations and primitives were checked, and exit 0
+- **must:** when every active obligation is proved, print `<N> primitives, <M> obligations, all tested` and exit 0
 - **kind:** functional
 - **status:** active
 
 ### A2 — An unproved obligation fails
-- **must:** fail, naming each obligation no test names
+- **must:** fail, naming each active obligation no test names
 - **kind:** functional
 - **status:** active
 
 ### A3 — An untagged test fails
-- **must:** fail, naming each test that names no obligation: a `#[test]` in a primitive's test file, where `#[impish::contract(…)]` belongs
+- **must:** fail, naming each test in `tests/contract/` that names no obligation: a `#[test]` in a primitive's test file, or any test in `main.rs`, a helper module, or a file with no primitive
+- **why:** a test there that names no obligation looks like a promise and proves none
 - **kind:** functional
 - **status:** active
 
-### A4 — An unknown tag fails
-- **must:** fail, naming each tag for an obligation its primitive doesn't declare
+### A4 — An unknown or retired tag fails
+- **must:** fail, naming the tag, on a tag for an obligation its primitive doesn't declare, or declares retired
 - **kind:** functional
 - **status:** active
 
 ### A5 — A malformed obligation list fails
-- **must:** fail, naming the file and line, when a line under `## Obligations` isn't part of a block, a heading isn't `### A<n> — <title>`, a field is unknown, given twice or missing (`must`, `kind`, `status`), a number is declared twice, or a README declares no obligations
+- **must:** fail, naming the file and line, when a line under `## Obligations` isn't part of a block, a heading isn't `### A<n> — <title>`, a block has no `must`, a field is unknown or given twice, a `status` isn't active or retired, a `kind` isn't functional, non-functional, persisted-format, ordering or security, a number is declared twice, an obligation sits outside `## Obligations`, or a README declares no obligations
 - **kind:** functional
 - **status:** active
 
@@ -39,7 +40,7 @@ exit code is 2 (cli/A3).
 - **status:** active
 
 ### A7 — The Contract is found from below
-- **must:** use the nearest directory, from the current one up, that has `contract/`, and fail when there is none
+- **must:** use the nearest directory, from the current one up, that has `contract/`
 - **kind:** functional
 - **status:** active
 
@@ -48,114 +49,24 @@ exit code is 2 (cli/A3).
 - **kind:** functional
 - **status:** active
 
-### A9 — Covers name real functions
-- **must:** fail, naming it, on a covers line that isn't `<file>::<function>` or names a function the file doesn't define
-- **why:** replaced by covers/A1, which also takes files, trees and types (#57)
-- **kind:** functional
-- **status:** retired
-
-### A10 — Ignored tests prove nothing
+### A9 — Ignored tests prove nothing
 - **must:** not count a test marked `#[ignore]` as proof, and name the ignored tests when an obligation is left without one
 - **kind:** functional
 - **status:** active
 
-### A11 — Tags stay in contract tests
+### A10 — Tags stay in contract tests
 - **must:** fail, naming the file and line, on an `#[impish::contract(…)]` attribute in `src/` or `tests/` outside a primitive's test file
+- **why:** `check` reads only the primitives' test files, so a tag elsewhere would prove nothing it can see
 - **kind:** functional
 - **status:** active
 
-### A12 — Surface lines are kind and name
-- **must:** fail, naming it, on a surface line that isn't `<kind> <name>`
-- **kind:** functional
-- **status:** active
-
-### A13 — Surface lines are real
-- **must:** with `[surface] command` in `impish.toml`, fail, naming it, on a surface line the command doesn't print, and fail when the command fails
-- **kind:** functional
-- **status:** active
-
-### A14 — Kind and status are known
-- **must:** fail, naming the file and line, on a `kind` other than functional, non-functional, persisted-format, ordering or security, or a `status` other than active or retired
-- **kind:** functional
-- **status:** active
-
-### A15 — Retired obligations and exceptions need no test
-- **must:** not require a test for a retired obligation or an exception, and fail, naming the tag, on a test that names one
-- **kind:** functional
-- **status:** active
-
-### A16 — Obligations live under ## Obligations
-- **must:** fail, naming the file and line, on an obligation heading or a `- **A<n>**` line outside `## Obligations`
-- **kind:** functional
-- **status:** active
-
-### A17 — --write publishes coverage
-- **must:** with `--write`, write `contract/coverage.json`: the active obligations in total, per kind and per primitive with the primitive's surface lines, and, with a surface command, how many of its lines some primitive covers, of how many, as a percentage, and which it doesn't
-- **why:** Impatient Programming rule 29: the Contract's coverage is published
-- **kind:** persisted-format
-- **status:** active
-
-### A18 — Stale coverage fails
-- **must:** fail, saying to run `cargo impish check --write`, when `contract/coverage.json` exists and isn't what `--write` would write
-- **kind:** functional
-- **status:** active
-
-### A19 — Test files are Rust
+### A11 — Test files are Rust
 - **must:** fail, naming the file and line, when a primitive's test file isn't valid Rust
 - **kind:** functional
 - **status:** active
 
-### A20 — Covers stay inside the crate
-- **must:** fail, without reading the file, on a covers line whose file is absolute or has a `..` component
-- **why:** a README is input, and `check` runs in CI with the repository's permissions
-- **kind:** security
-- **status:** active
-
-### A21 — check only reads
-- **must:** leave every file in the crate as it was, whether the Contract holds or not, unless `--write` is given
+### A12 — check only reads
+- **must:** leave every file in the project as it was, whether the Contract holds or not
 - **why:** a gate that edits the tree it checks can hide what it found
 - **kind:** non-functional
 - **status:** active
-
-### A22 — Every covers and surface block counts
-- **must:** read every `covers` and every `surface` block in a README, not only the first of each
-- **why:** a block that is silently skipped is code or surface the Contract claims and nothing checks (#15)
-- **kind:** functional
-- **status:** active
-
-### A23 — Only Contract tests live in tests/contract/
-- **must:** fail, naming the file and line, on each test in `tests/contract/` outside a primitive's test file, such as one in `main.rs`, a helper module, or `tests/contract/<name>.rs` with no `contract/<name>/README.md`
-- **why:** a test there that no Contract reads looks like a promise and proves none (#27)
-- **kind:** functional
-- **status:** active
-
-### A24 — --format json reports as JSON
-- **must:** with `--format json`, print one JSON document on stdout, with `version` 1, whether the Contract is `met`, the counts of obligations and primitives, every problem the text names and the coverage `--write` publishes; write nothing to stderr, and exit as the text does
-- **why:** CI reads results, not prose (#30)
-- **kind:** persisted-format
-- **status:** active
-
-### A25 — A stale mutate result fails
-- **must:** keep each mutate result `mutate --write` recorded in `contract/coverage.json`, also on `--write`, and fail, naming the primitive, when the README, mutants.md, contract tests or covered files it was recorded for have changed since; a primitive with no recorded result passes
-- **why:** a published result must be about the code as it is, and `check` stays static: it compares fingerprints and never runs mutate (#31)
-- **kind:** functional
-- **status:** active
-
-```covers
-src/check.rs::run
-src/check.rs::check
-core/src/lib.rs::obligations
-src/contract.rs::tagged_tests
-src/contract.rs::covers
-src/contract.rs::contract_attributes
-src/contract.rs::surface
-src/check.rs::real_surface
-src/check.rs::coverage
-src/check.rs::mutate_results
-src/code.rs::Resolved::files_of
-src/main.rs::root
-```
-
-```surface
-cli check
-```

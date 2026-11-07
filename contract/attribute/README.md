@@ -15,7 +15,7 @@ is a compile error.
 - **status:** active
 
 ### A2 — It names an obligation
-- **must:** fail to compile, saying what it takes, when the attribute names no obligation, or something other than string literals and one `blind = "<reason>"`
+- **must:** fail to compile, saying what it takes, when the attribute names no obligation, or something other than string literals
 - **kind:** functional
 - **status:** active
 
@@ -40,14 +40,3 @@ is a compile error.
 - **why:** adopting impish in existing tests should take one added line, not a rewrite of each test's attributes
 - **kind:** functional
 - **status:** active
-
-```covers
-impish/src/lib.rs::contract
-impish/src/lib.rs::is_test
-impish/src/lib.rs::has_test
-impish/src/lib.rs::tested_in_source
-```
-
-```surface
-attribute impish::contract
-```

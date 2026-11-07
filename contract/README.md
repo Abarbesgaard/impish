@@ -4,7 +4,7 @@ What impish promises, written down as numbered obligations, each proved by a
 contract test. The layout is flinch's sibling layout:
 
 ```
-contract/<primitive>/README.md   purpose, obligations, covers block
+contract/<primitive>/README.md   purpose and obligations
 tests/contract/<primitive>.rs    the tests that prove them
 ```
 
@@ -17,22 +17,16 @@ and never renumbered:
 ### A1 — A held Contract passes
 - **must:** say how many obligations were checked, and exit 0
 - **why:** optional; the reason the obligation exists
-- **record:** optional; the decision records behind it, such as D3, D7
-- **kind:** functional
-- **status:** active
+- **kind:** optional; functional
+- **status:** optional; active
 ```
 
-`kind` is one of functional, non-functional, persisted-format, ordering,
-security or exception; `status` is active or retired. A retired obligation
-keeps its number and needs no test.
-
-An `exception` excuses a deliberate gap, such as code proven by an integration
-test against a real service, and names it with a `- **target:**
-<file>::<function>` or `<file>` field. It needs no test, a test may not name
-it, it is counted apart from the obligations and listed under `exceptions` in
-`coverage.json`, and `check` fails once its target is gone. Every line under `## Obligations` must belong to a block, and
-an obligation outside it fails, so a promise can't silently fall out of the
-Contract. Fenced code blocks are skipped.
+`must` is required. `kind`, when given, is one of functional, non-functional,
+persisted-format, ordering or security; `status` is active (the default) or
+retired. A retired obligation keeps its number and needs no test. Every line
+under `## Obligations` must belong to a block, and an obligation outside it
+fails, so a promise can't silently fall out of the Contract. Fenced code
+blocks are skipped.
 
 Every test in `tests/contract/<primitive>.rs` names the obligations it proves
 with the `impish` crate's attribute. On its own it makes the function a test;
@@ -45,134 +39,10 @@ fn ...
 
 The attribute checks each tag against `contract/` as the test compiles, so
 a typo or a retired obligation is a compile error. A plain `#[test]` there
-names no obligation and fails, and a test marked
-`#[ignore]` proves nothing. The attribute belongs only in
-`tests/contract/<primitive>.rs`.
-
-A README may list the code its obligations are about in covers blocks. A
-line names a file (`src/lib.rs`), a tree (`src/check/...`), a function or
-type (`src/lib.rs::parse`, `src/lib.rs::Parser`) or a method
-(`src/lib.rs::Parser::next`), and must name at least one function. Each
-function goes to the primitive that names it most specifically, a method
-before a function or type, before a file, before a tree; a tie goes to the
-primitive whose name sorts first. `mutate` breaks exactly the functions a
-primitive owns, nested functions included. `check` prints how many of the
-functions in `src/` some primitive owns, records it under `code` in
-`coverage.json`, and with `--outside` lists the rest; `#[cfg(test)]` code and
-`@generated` files are left out. See `contract/covers/`.
-
-````markdown
-```covers
-src/check.rs::run
-src/check/...
-```
-````
-
-A README may also list the surface its tests drive (commands, tools,
-endpoints) in a surface block of `<kind> <name>` lines:
-
-````markdown
-```surface
-cli check
-```
-````
-
-A README may have several covers or surface blocks, for example one beside
-each obligation; every one is read.
-
-To check those lines against the real surface, give impish a command that
-prints it, one `<kind> <name>` per line, in `impish.toml`:
-
-```toml
-[surface]
-command = ["sh", "scripts/surface.sh"]
-```
-
-`cargo impish check --write` writes `contract/coverage.json`, the published
-coverage of the Contract. Once it exists, `check` fails when it's out of date.
-impish's CI publishes it in the job summary of every run.
-`cargo impish mutate <primitive> --write` adds whether the primitive's mutate
-is met; `check` fails once that result is stale.
+names no obligation and fails, and a test marked `#[ignore]` proves nothing.
+The attribute belongs only in `tests/contract/<primitive>.rs`, and every test
+in `tests/contract/` belongs to a primitive.
 
 Contract tests are black-box: they run the `cargo-impish` binary.
 
 `cargo impish check` holds the Contract to its tests; see `contract/check/`.
-`cargo impish mutate <primitive>` breaks the code a primitive covers with
-cargo-mutants and credits each kill to the obligations whose tests caught it.
-It is strict: an obligation whose tests catch nothing is hollow and fails, a
-contract test that catches nothing is blind and fails, and so does any mutant
-no contract test catches, unless `mutants.md` declares it. A contract test
-whose every catch another test makes too is named as mutation-blind, a
-warning; `#[impish::contract("p/A1", blind = "<reason>")]` keeps it quietly.
-See `contract/mutate/`.
-
-## Intent
-
-`contract/intent.md` says what the project is for, and
-`contract/<primitive>/intent.md` what one primitive is for. Both are optional;
-when present each needs a `## Purpose` and a `## Public surface` section, or
-`check` fails. `cargo impish regen <primitive>` puts them in the pack an agent
-rebuilds the primitive from.
-
-## Decision records
-
-Why the project is built the way it is lives in `contract/decisions.toml`;
-the decisions of one primitive in `contract/<primitive>/decisions.toml`. One
-`[[record]]` each:
-
-```toml
-[[record]]
-id = "D3"                      # required, never reused
-date = 2026-11-03              # required
-decision = "check never builds or runs the crate"   # required
-driver = "a gate that runs code is slow and unsafe" # required
-approved_by = "Abarbesgaard"   # required
-alternatives = ["run the tests: duplicates cargo test"]
-consequences = ["check can't tell whether a test passes"]
-depends_on = ["D2"]
-superseded_by = "D12"
-expires = 2027-01-01
-
-[[record.conditions]]
-text = "syn parses the test files"
-dep = "syn"
-version = "^3"
-```
-
-Everything after `approved_by` is optional. A condition is a premise that, if
-it stops holding, makes the decision suspect. It has a `text` and at most one
-check: `dep` (a crate in `Cargo.lock`, with an optional semver `version`),
-`env` (a variable is set), `file` (a path under the project root exists) or
-`rustc` (the active rustc matches a semver requirement). A condition with only
-`text` is prose.
-
-An obligation points at the records behind it with a `- **record:** D3` field;
-several ids are comma-separated. `check` fails on a missing required field, a
-repeated id, an unknown field, or a `record:`, `depends_on` or
-`superseded_by` that names no record.
-
-`cargo impish conditions` re-checks every condition and prints ok or suspect
-per record. Prose conditions count as not machine-checkable. It exits 1 when
-any record is suspect.
-
-## Scope ceilings
-
-`contract/scope.toml` caps what the project may grow to, so a machine says when
-it has outgrown what one person can read (rule 17). One `[[ceiling]]` each:
-
-```toml
-[[ceiling]]
-name = "source lines"          # required
-counts = "lines"               # required: files, lines or functions
-glob = "src/**/*.rs"           # required, relative to the project root
-ceiling = 4000                 # required, above 0
-why = "one person can read it" # required
-record = "D12"                 # optional decision record
-```
-
-`files` counts the files the glob matches, `lines` their non-blank lines and
-`functions` the functions, methods and nested functions in the matched `.rs`
-files. `target/` and hidden directories are left out. `check` fails when a
-count is over its ceiling, or on a malformed ceiling or a glob that matches no
-file, and otherwise prints each count against its ceiling. `--write` records
-each ceiling, but not its count, in `contract/coverage.json`.
