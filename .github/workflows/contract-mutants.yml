@@ -6,7 +6,8 @@ name: Contract mutants
 # the merge, each primitive runs plain `mutate --since` against the commit
 # before the push, so a changed Contract or contract test is held against all
 # the code it covers. A failure on main is red there and needs a fix PR; it
-# doesn't hold back the release.
+# doesn't hold back the release. `mutate` is held only after the merge: each
+# of its mutants runs cargo-mutants in turn, and on a PR that took 26 minutes.
 
 on:
   push:
@@ -26,6 +27,10 @@ on:
       only-lines:
         type: boolean
         default: false
+      skip:
+        description: "Primitives held only after the merge"
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -56,10 +61,12 @@ jobs:
         with:
           persist-credentials: false
       - id: ls
+        env:
+          SKIP: ${{ inputs.skip }}
         run: |
           list=$(for f in contract/*/README.md; do
             if grep -q '^```covers' "$f"; then basename "$(dirname "$f")"; fi
-          done | jq -Rnc '[inputs]')
+          done | grep -vxF -e "${SKIP:-}" | jq -Rnc '[inputs]')
           echo "list=$list" >> "$GITHUB_OUTPUT"
 
   mutate:
