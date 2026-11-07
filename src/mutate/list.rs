@@ -1,6 +1,7 @@
 //! The mutants cargo-mutants makes of the code a primitive covers.
 
 use std::collections::BTreeSet;
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -95,4 +96,17 @@ pub(super) fn list(root: &Path, owned: &[Function]) -> anyhow::Result<Vec<Mutant
 
 pub(super) fn cargo() -> String {
     std::env::var("CARGO").unwrap_or_else(|_| "cargo".into())
+}
+
+/// The directories under contract/ with a README, in order.
+pub(super) fn primitives(root: &Path) -> anyhow::Result<Vec<String>> {
+    let dir = root.join("contract");
+    let mut names: Vec<String> = fs::read_dir(&dir)
+        .with_context(|| format!("read {}", dir.display()))?
+        .flatten()
+        .filter(|entry| entry.path().join("README.md").is_file())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    Ok(names)
 }

@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, anyhow, bail};
 use serde_json::{Map, Value, json};
 
+mod dry;
 mod erase;
 mod judge;
 mod list;
@@ -35,8 +36,7 @@ use impish_core::obligations;
 /// Mutates the primitive, or every primitive that covers code; with a
 /// `since` ref, only the mutants on lines changed since its merge base (see
 /// `Changes::touch_contract` for the flag); with
-/// the `whole` suite, the tests outside the Contract too; up to `jobs`
-/// mutants at once.
+/// the `whole` suite, the tests outside the Contract too; as the `knobs` say.
 pub fn run(
     root: &Path,
     primitive: Option<&str>,
@@ -44,11 +44,11 @@ pub fn run(
     whole: bool,
     write: bool,
     json: bool,
-    jobs: usize,
+    knobs: Knobs,
 ) -> anyhow::Result<ExitCode> {
     let names = match primitive {
         Some(name) => vec![name.to_string()],
-        None => primitives(root)?,
+        None => list::primitives(root)?,
     };
     let changes = since.map(|(r, c)| Changes::since(root, r, c)).transpose()?;
     let mut met = true;
@@ -60,7 +60,10 @@ pub fn run(
         whole,
         write,
         json,
-        jobs: jobs.max(1),
+        knobs: Knobs {
+            jobs: knobs.jobs.max(1),
+            ..knobs
+        },
     };
     for name in &names {
         let ran = mutate(root, name, opts)?;
@@ -104,17 +107,12 @@ pub fn run(
     })
 }
 
-/// The directories under contract/ with a README, in order.
-fn primitives(root: &Path) -> anyhow::Result<Vec<String>> {
-    let dir = root.join("contract");
-    let mut names: Vec<String> = fs::read_dir(&dir)
-        .with_context(|| format!("read {}", dir.display()))?
-        .flatten()
-        .filter(|entry| entry.path().join("README.md").is_file())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .collect();
-    names.sort();
-    Ok(names)
+/// Mutants at once, only listing them, and baseline run times to time out.
+#[derive(Clone, Copy)]
+pub struct Knobs {
+    pub jobs: usize,
+    pub dry_run: bool,
+    pub coefficient: f64,
 }
 
 /// How each primitive is mutated.
@@ -125,7 +123,7 @@ struct Opts<'a> {
     whole: bool,
     write: bool,
     json: bool,
-    jobs: usize,
+    knobs: Knobs,
 }
 
 /// What one primitive's run found.
@@ -133,6 +131,17 @@ struct Ran {
     problems: Vec<String>,
     json: Value,
     outside: Outside,
+}
+
+impl Ran {
+    fn new(problems: Vec<String>, json: Value) -> Self {
+        let outside = Outside::new();
+        Ran {
+            problems,
+            json,
+            outside,
+        }
+    }
 }
 
 /// Mutates one primitive and reports it; `None` when `every` primitive is
@@ -144,7 +153,11 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         whole,
         write,
         json,
-        jobs,
+        knobs: Knobs {
+            jobs,
+            dry_run,
+            coefficient,
+        },
     } = opts;
     let readme_file = format!("contract/{primitive}/README.md");
     let readme =
@@ -241,6 +254,13 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
             )));
         }
     }
+    if dry_run {
+        if !json {
+            print!("{}", dry::text(primitive, owned.len(), &mutants, &declared));
+        }
+        let json = dry::json(primitive, &mutants, &declared);
+        return Ok(Some(Ran::new(Vec::new(), json)));
+    }
     let scratches = (0..jobs.min(mutants.len()))
         .map(|worker| Scratch::copy(root, whole, worker))
         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -264,7 +284,8 @@ fn mutate(root: &Path, primitive: &str, opts: Opts) -> anyhow::Result<Option<Ran
         );
     }
     // Mutants tried at once share the CPU, so each runs slower than this.
-    let timeout = started.elapsed() * 5 * scratches.len() as u32 + Duration::from_secs(10);
+    let timeout =
+        started.elapsed().mul_f64(coefficient) * scratches.len() as u32 + Duration::from_secs(10);
     if !json {
         println!(
             "{primitive}: {} mutants of {} functions, {} tests",
@@ -375,11 +396,7 @@ fn finish(
 ) -> Ran {
     let doc = judge::json(primitive, tried, declared, &v);
     if json {
-        return Ran {
-            problems: v.problems,
-            json: doc,
-            outside: Outside::new(),
-        };
+        return Ran::new(v.problems, doc);
     }
     if !tried.is_empty() {
         println!(
@@ -394,9 +411,5 @@ fn finish(
     for problem in &v.problems {
         eprintln!("{problem}");
     }
-    Ran {
-        problems: v.problems,
-        json: doc,
-        outside: Outside::new(),
-    }
+    Ran::new(v.problems, doc)
 }
