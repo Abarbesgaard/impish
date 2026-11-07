@@ -2,7 +2,7 @@
 members = ["core", "impish"]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/Abarbesgaard/impish"
@@ -10,7 +10,7 @@ repository = "https://github.com/Abarbesgaard/impish"
 # Published crates need a version on every path dependency. A caret
 # requirement keeps matching as the workspace version moves, until 0.8.
 [workspace.dependencies]
-impish-core = { path = "core", version = "0.7.0" }
+impish-core = { path = "core", version = "0.7.1" }
 
 [package]
 name = "cargo-impish"
@@ -48,5 +48,5 @@ archunit = "0.0.2"
 # Tags this crate's own tests with the published attribute, not the one in
 # impish/: mutating the attribute must not rewrite the tests that catch it.
 # The fixtures in tests/contract build against impish/.
-impish = "0.6"
+impish = "0.7"
 tempfile = "3.27.0"

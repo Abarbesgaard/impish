@@ -104,13 +104,13 @@ dependencies = [
 
 [[package]]
 name = "cargo-impish"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "archunit",
  "clap",
- "impish 0.6.19",
- "impish-core 0.7.0",
+ "impish 0.7.0",
+ "impish-core 0.7.1",
  "proc-macro2",
  "syn 3.0.9",
  "tempfile",
@@ -390,19 +390,9 @@ dependencies = [
 
 [[package]]
 name = "impish"
-version = "0.6.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2c80be19106691acc425d634012c12c37993f61000ef116f924aecc02f53e32"
-dependencies = [
- "impish-core 0.6.19",
- "proc-macro2",
- "quote",
- "syn 3.0.9",
-]
-
-[[package]]
-name = "impish"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9691eb1f75de8857dbe86e921c475ed3b47555feeeee672f62fe0c615b4402c"
 dependencies = [
  "impish-core 0.7.0",
  "proc-macro2",
@@ -411,14 +401,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "impish-core"
-version = "0.6.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c499d48d0d3256340adf9d70e3e7eb7bf694f7426bca48773d873c951bcbec5"
+name = "impish"
+version = "0.7.1"
+dependencies = [
+ "impish-core 0.7.1",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
 
 [[package]]
 name = "impish-core"
 version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dca404895a83d90b2ca9612e67b62eca2280a8f60b599a4c02ab13366fbe0038"
+
+[[package]]
+name = "impish-core"
+version = "0.7.1"
 
 [[package]]
 name = "indexmap"
