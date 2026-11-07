@@ -20,7 +20,8 @@ name: CI
 # Workflow security: zizmor on these workflows.
 # Similar code:      no new near-duplicate functions (scripts/similar-code.sh).
 # Version:           a change to what ships bumps the version (scripts/shipped.sh).
-# Test:              the suite, then `cargo impish check` on impish itself.
+# Test:              the suite, then `cargo impish check` and
+#                    `cargo impish conditions` on impish itself.
 # Portability:       the suite on macOS and Windows; on macOS, the pipeline's
 #                    scripts under its bash 3.2 too.
 # Mutants:           every line the PR changes is mutated, in four shards; a
@@ -105,6 +106,8 @@ jobs:
       - run: cargo test
       # impish holds its own Contract (rule 20).
       - run: cargo run --quiet -- check
+      # Its decision records still hold (contract/decisions.toml).
+      - run: cargo run --quiet -- conditions
       - name: Contract coverage
         run: |
           {
