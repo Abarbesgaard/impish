@@ -11,7 +11,8 @@ name: CI
 #   Similar code (PRs) ─┼── Mutants (PRs) ─┬─ CI ── Release (main, new version)
 #   Version (PRs) ──────┤                  │
 #   Test ───────────────┘                  │
-#   Portability ───────────────────────────┘
+#   Portability ───────────────────────────┤
+#   Contract ──────────────────────────────┘
 #
 # Format and Clippy: fmt, clippy, unused dependencies, copy-paste outside Rust
 #                    (jscpd, .jscpd.json), and the pipeline's own scripts
@@ -23,6 +24,8 @@ name: CI
 # Test:              the suite, then `cargo impish check` on impish itself.
 # Portability:       the suite on macOS and Windows; on macOS, the pipeline's
 #                    scripts under its bash 3.2 too.
+# Contract:          impish as its users run it: the released cargo-impish
+#                    checks impish's own Contract, as the README's In CI shows.
 # Mutants:           every line the PR changes is mutated by cargo-mutants,
 #                    in four shards; a survivor fails.
 # Release:           publishes the crates and a GitHub release for a new version.
@@ -97,6 +100,28 @@ jobs:
       - run: cargo test
       # impish holds its own Contract (rule 20).
       - run: cargo run --quiet -- check
+
+  # impish as its users run it (README, In CI): the released cargo-impish on
+  # impish's own Contract. Test checks it with the code in this PR.
+  contract:
+    name: Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: false
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: cargo-impish
+      - run: cargo test --test contract
+      - run: cargo impish check
 
   # Users run impish on macOS and Windows too.
   portability:
@@ -276,7 +301,7 @@ jobs:
   # let a failure through; this one fails if anything failed or was cancelled.
   ci:
     name: CI
-    needs: [lint, test, portability, deny, zizmor, mutants, similar, version]
+    needs: [lint, test, contract, portability, deny, zizmor, mutants, similar, version]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

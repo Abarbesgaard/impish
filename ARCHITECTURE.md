@@ -68,6 +68,7 @@ merges itself (rule 27).
 |---|---|
 | Format, Clippy | CI `lint` |
 | Tests, then `cargo impish check` on impish itself | CI `test` |
+| The released `cargo-impish` checks impish's Contract, as users run it | CI `contract` |
 | The suite on macOS and Windows | CI `portability` |
 | Architecture: the dependency directions and boundaries above, file size | `tests/architecture.rs` ([0008](docs/decisions/0008-architecture-rules-are-tests-not-obligations.md)) |
 | Dependency licences, sources and advisories | CI `deny`, `deny.toml`; nightly `audit.yml` |
