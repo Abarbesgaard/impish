@@ -26,8 +26,9 @@ name: CI
 # Mutants:           every line the PR changes is mutated, in four shards; a
 #                    survivor fails.
 # Contract mutants:  impish's own `mutate --since --only-lines`, built from the
-#                    PR, one job per primitive (rule 20); contract-mutants.yml
-#                    re-mutates all of a changed Contract after the merge.
+#                    PR, one job per primitive but mutate (rule 20);
+#                    contract-mutants.yml re-mutates all of a changed Contract,
+#                    mutate's included, after the merge.
 # Release:           publishes the crates and a GitHub release for a new version.
 on:
   push:
@@ -245,6 +246,9 @@ jobs:
     with:
       since: origin/${{ github.base_ref }}
       only-lines: true
+      # Its mutants run cargo-mutants in turn: 26 minutes on a PR. Mutants
+      # (PR diff) still covers its lines here, and it's held after the merge.
+      skip: mutate
 
   # The exhale of rule 12: a function this PR adds or edits that looks like
   # another one fails, unless the pair is on the base already or declared in
