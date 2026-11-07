@@ -132,7 +132,7 @@ must catch at least one mutant too.
 
 ### A21 — --only-lines holds only the changed lines
 - **must:** with `--since <ref> --only-lines`, mutate only the covered lines changed since the merge base, even of a primitive whose `contract/<primitive>/` or `tests/contract/<primitive>.rs` changed; refuse `--only-lines` without `--since`
-- **why:** re-mutating all of `mutate` on a PR that changes its tests takes hours, so a PR checks the lines it changed and main re-mutates all of it after the merge (#89)
+- **why:** re-mutating all of `mutate` on a PR that changes its tests takes hours, so a PR can check just the lines it changed (#89)
 - **kind:** functional
 - **status:** active
 
