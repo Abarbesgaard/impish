@@ -1,4 +1,6 @@
-use crate::harness::{NOT_MET, Project, calc, readme, test_fn};
+use std::fs;
+
+use crate::harness::{Checked, NOT_MET, Project, calc, readme, test_fn};
 
 #[impish::contract("check/A1")]
 fn a_held_contract_passes_and_says_what_it_checked() {
@@ -328,4 +330,213 @@ fn check_leaves_the_project_as_it_was() {
     let before = p.files();
     assert_eq!(p.check().code, Some(1));
     assert_eq!(p.files(), before, "a failing check changed the project");
+}
+
+/// calc: A1 proved, A2 not, A3 retired; sum: both proved, but a test that
+/// names nothing; mul holds; and a tag in src/. Three problems, each at a
+/// file and line.
+fn ledger() -> Project {
+    let calc = [
+        "# calc",
+        "",
+        "## Obligations",
+        "",
+        "### A1 — Adds",
+        "- **must:** add",
+        "",
+        "### A2 — Pipes | splits",
+        "- **must:** split",
+        "",
+        "### A3 — Divides",
+        "- **must:** divide",
+        "- **status:** retired",
+    ];
+    let p = Project::new();
+    p.write("contract/calc/README.md", &calc.join("\n"))
+        .write("tests/contract/calc.rs", &test_fn("adds", &["calc/A1"]))
+        .write("contract/mul/README.md", &readme(&["A1"]))
+        .write("tests/contract/mul.rs", &test_fn("muls", &["mul/A1"]))
+        .write("contract/sum/README.md", &readme(&["A1", "A2"]))
+        .write(
+            "tests/contract/sum.rs",
+            &(test_fn("sums", &["sum/A1, sum/A2"]) + &test_fn("loose", &[])),
+        )
+        .write(
+            "src/lib.rs",
+            "#[impish::contract(\"calc/A1\")]\nfn stray() {}\n",
+        );
+    p
+}
+
+/// A held Contract: sum alone.
+fn held() -> Project {
+    let p = Project::new();
+    p.write("contract/sum/README.md", &readme(&["A1", "A2"]))
+        .write(
+            "tests/contract/sum.rs",
+            &test_fn("sums", &["sum/A1, sum/A2"]),
+        );
+    p
+}
+
+/// `check` with a job summary file, and what it wrote there.
+fn summarised(p: &Project, env: &[(&str, &str)]) -> (Checked, String) {
+    let dir = tempfile::TempDir::new().unwrap();
+    let file = dir.path().join("summary.md");
+    fs::write(&file, "before\n").unwrap();
+    let file = file.to_str().unwrap();
+    let mut env = env.to_vec();
+    env.push(("GITHUB_STEP_SUMMARY", file));
+    let out = p.check_env(&env);
+    let text = fs::read_to_string(file).unwrap();
+    let summary = text
+        .strip_prefix("before\n")
+        .expect("appended, not replaced");
+    (out, summary.to_string())
+}
+
+#[impish::contract("check/A13")]
+fn a_job_summary_is_appended_and_output_is_unchanged() {
+    for p in [held(), ledger()] {
+        let plain = p.check();
+        let (out, summary) = summarised(&p, &[]);
+        assert_eq!(
+            (out.code, &out.stdout, &out.stderr),
+            (plain.code, &plain.stdout, &plain.stderr)
+        );
+        assert!(summary.starts_with("## "), "{summary}");
+    }
+}
+
+#[impish::contract("check/A14")]
+fn the_summary_leads_with_the_verdict() {
+    let (_, summary) = summarised(&held(), &[]);
+    assert!(
+        summary.starts_with(
+            "## ✅ The Contract holds\n\n> [!TIP]\n> **1 primitives, 2 obligations, all tested.**\n"
+        ),
+        "{summary}"
+    );
+    let (_, summary) = summarised(&ledger(), &[]);
+    assert!(
+        summary.starts_with(
+            "## ❌ The Contract is not met\n\n> [!CAUTION]\n> **3 primitives, 5 obligations, 3 problems.**\n"
+        ),
+        "{summary}"
+    );
+}
+
+#[impish::contract("check/A15")]
+fn the_summary_has_a_row_per_primitive() {
+    let (_, summary) = summarised(&ledger(), &[]);
+    let rows = "| Primitive | Active | Tested | Retired | |\n\
+                | :-- | --: | --: | --: | :-: |\n\
+                | [calc](contract/calc/README.md) | 2 | 1 | 1 | ❌ |\n\
+                | [mul](contract/mul/README.md) | 1 | 1 | 0 | ✅ |\n\
+                | [sum](contract/sum/README.md) | 2 | 2 | 0 | ❌ |\n";
+    assert!(summary.contains(rows), "{summary}");
+    let (_, summary) = summarised(&held(), &[]);
+    let row = "| [sum](contract/sum/README.md) | 2 | 2 | 0 | ✅ |\n";
+    assert!(summary.contains(row), "{summary}");
+    let github = [
+        ("GITHUB_SERVER_URL", "https://github.example"),
+        ("GITHUB_REPOSITORY", "o/r"),
+        ("GITHUB_SHA", "abc123"),
+    ];
+    let (_, summary) = summarised(&ledger(), &github);
+    let row = "| [sum](https://github.example/o/r/blob/abc123/contract/sum/README.md) | 2 | 2 | 0 | ❌ |\n";
+    assert!(summary.contains(row), "{summary}");
+    let (_, summary) = summarised(&ledger(), &github[..2]);
+    assert!(
+        summary.contains("| [sum](contract/sum/README.md) |"),
+        "{summary}"
+    );
+}
+
+#[impish::contract("check/A16")]
+fn the_summary_lists_each_problem_with_where_and_a_fix() {
+    let (_, summary) = summarised(&ledger(), &[]);
+    let problems = &summary[summary.find("### Problems\n").expect(&summary)..];
+    let expected = [
+        "**calc**",
+        "- calc/A2 has no test  ",
+        "  `contract/calc/README.md:8` · ",
+        "**sum**",
+        "- sum::loose names no obligation  ",
+        "  `tests/contract/sum.rs:5` · ",
+        "**Elsewhere**",
+        "- src/lib.rs:1: an #[impish::contract] attribute outside tests/contract/\\<primitive>.rs  ",
+        "  `src/lib.rs:1` · ",
+    ];
+    let mut rest = problems;
+    for want in expected {
+        let at = rest
+            .find(want)
+            .unwrap_or_else(|| panic!("{want:?} in order in:\n{problems}"));
+        rest = &rest[at + want.len()..];
+        if want.ends_with(" · ") {
+            let fix = rest.lines().next().unwrap();
+            assert!(
+                fix.len() > 10 && fix.ends_with('.'),
+                "a fix after {want:?}: {fix:?}"
+            );
+        }
+    }
+    assert!(!problems.contains("**mul**"), "{problems}");
+    let (_, summary) = summarised(&held(), &[]);
+    assert!(!summary.contains("### Problems"), "{summary}");
+}
+
+#[impish::contract("check/A17")]
+fn the_summary_folds_away_every_obligation() {
+    let (_, summary) = summarised(&ledger(), &[]);
+    let calc = "<details>\n<summary><b>calc</b> · 2 active, 1 tested</summary>\n\n\
+                | | Obligation | Proved by |\n\
+                | :-- | :-- | :-- |\n\
+                | A1 | Adds | `calc::adds` |\n\
+                | A2 | Pipes \\| splits | no test |\n\
+                | ~~A3~~ | ~~Divides~~ | retired |\n\n\
+                </details>\n";
+    assert!(summary.contains(calc), "{summary}");
+    assert!(summary.contains("<summary><b>sum</b> · 2 active, 2 tested</summary>"));
+    assert!(!summary.contains("<details open"));
+}
+
+#[impish::contract("check/A18")]
+fn problems_annotate_their_line_in_github_actions() {
+    let p = ledger();
+    let out = p.check_env(&[("GITHUB_ACTIONS", "true")]);
+    let annotations: Vec<&str> = out.stdout.lines().filter(|l| l.starts_with("::")).collect();
+    assert_eq!(
+        annotations,
+        [
+            "::error file=contract/calc/README.md,line=8::calc/A2 has no test",
+            "::error file=tests/contract/sum.rs,line=5::sum::loose names no obligation",
+            "::error file=src/lib.rs,line=1::src/lib.rs:1: an #[impish::contract] attribute outside tests/contract/<primitive>.rs",
+        ]
+    );
+    assert_eq!(out.code, Some(1));
+
+    let parent = p.path().parent().unwrap().to_str().unwrap();
+    let name = p.path().file_name().unwrap().to_str().unwrap();
+    let out = p.check_env(&[("GITHUB_ACTIONS", "true"), ("GITHUB_WORKSPACE", parent)]);
+    let want = format!("::error file={name}/src/lib.rs,line=1::");
+    assert!(out.stdout.contains(&want), "{want} in:\n{}", out.stdout);
+
+    let out = p.check_env(&[("GITHUB_ACTIONS", "false")]);
+    assert!(!out.stdout.contains("::"), "{}", out.stdout);
+
+    let odd = calc(&["A1"], &test_fn("adds", &["calc/A1", "calc/A%1\r\nx"]));
+    let out = odd.check_env(&[("GITHUB_ACTIONS", "true")]);
+    let want = "::calc::adds names `calc/A%251%0D%0Ax`, which contract/calc doesn't declare";
+    assert!(out.stdout.contains(want), "{want} in:\n{}", out.stdout);
+}
+
+#[impish::contract("check/A19")]
+fn an_unwritable_summary_is_undecided() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let file = dir.path().to_str().unwrap();
+    let out = held().check_env(&[("GITHUB_STEP_SUMMARY", file)]);
+    assert_eq!(out.code, Some(2));
+    assert!(out.stderr.contains(file), "{}", out.stderr);
 }

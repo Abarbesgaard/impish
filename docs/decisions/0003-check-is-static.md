@@ -1,6 +1,6 @@
 # 0003 — check is static
 
-**Status:** accepted (#3, #13)
+**Status:** accepted (#3, #13); amended by [0013](0013-check-writes-the-github-job-summary.md)
 
 ## Decision
 

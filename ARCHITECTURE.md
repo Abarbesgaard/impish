@@ -25,6 +25,7 @@ src/
   main.rs       parses the command line (clap) and finds the nearest contract/
   check.rs      `cargo impish check`: every obligation has a test
   check/
+    github.rs   in GitHub Actions: the job summary and line annotations
     stray.rs    contract tags and tests outside the primitives' test files
   contract.rs   reads the tests and #[impish::contract] tags in a file with syn
 ```
@@ -35,7 +36,8 @@ a run, which exits 2 (undecided), not 1 (not met).
 
 `check` is static: it reads READMEs and parses test files, and never builds or
 runs a test. `cargo test` runs them, and the attribute ties the two together.
-([0003](docs/decisions/0003-check-is-static.md))
+The one file it writes is the job summary GitHub Actions hands it.
+([0003](docs/decisions/0003-check-is-static.md), [0013](docs/decisions/0013-check-writes-the-github-job-summary.md))
 
 ## impish (the attribute)
 

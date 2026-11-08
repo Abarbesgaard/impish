@@ -6,9 +6,28 @@ use std::process::{Command, Output};
 
 use tempfile::TempDir;
 
+/// What GitHub Actions sets that impish reads. Every run starts without
+/// them, so a test run inside CI behaves as one outside it.
+const GITHUB: [&str; 6] = [
+    "GITHUB_ACTIONS",
+    "GITHUB_STEP_SUMMARY",
+    "GITHUB_WORKSPACE",
+    "GITHUB_SERVER_URL",
+    "GITHUB_REPOSITORY",
+    "GITHUB_SHA",
+];
+
 pub fn impish_in(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_cargo-impish"))
-        .args(args)
+    impish_env(dir, args, &[])
+}
+
+pub fn impish_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_cargo-impish"));
+    for var in GITHUB {
+        cmd.env_remove(var);
+    }
+    cmd.args(args)
+        .envs(env.iter().copied())
         .current_dir(dir)
         .output()
         .expect("run cargo-impish")
@@ -25,6 +44,16 @@ pub struct Checked {
     pub code: Option<i32>,
     pub stdout: String,
     pub stderr: String,
+}
+
+impl From<Output> for Checked {
+    fn from(out: Output) -> Self {
+        Checked {
+            code: out.status.code(),
+            stdout: String::from_utf8(out.stdout).unwrap(),
+            stderr: String::from_utf8(out.stderr).unwrap(),
+        }
+    }
 }
 
 impl Checked {
@@ -70,15 +99,19 @@ impl Project {
         out
     }
 
+    pub fn path(&self) -> &Path {
+        self.0.path()
+    }
+
+    /// `check` with `env` set, as GitHub Actions would set it.
+    pub fn check_env(&self, env: &[(&str, &str)]) -> Checked {
+        Checked::from(impish_env(self.0.path(), &["check"], env))
+    }
+
     fn run_in(&self, sub: &str, args: &[&str]) -> Checked {
         let dir = self.0.path().join(sub);
         fs::create_dir_all(&dir).unwrap();
-        let out = impish_in(&dir, args);
-        Checked {
-            code: out.status.code(),
-            stdout: String::from_utf8(out.stdout).unwrap(),
-            stderr: String::from_utf8(out.stderr).unwrap(),
-        }
+        Checked::from(impish_in(&dir, args))
     }
 }
 
