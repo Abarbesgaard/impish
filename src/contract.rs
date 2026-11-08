@@ -8,6 +8,8 @@ use syn::{Attribute, Expr, ExprLit, ItemFn, Lit, Token};
 
 pub struct TaggedTest {
     pub name: String,
+    /// The 1-based line of its name.
+    pub line: usize,
     pub tags: Vec<String>,
     pub ignored: bool,
 }
@@ -44,6 +46,7 @@ pub fn tagged_tests(src: &str) -> syn::Result<Vec<TaggedTest>> {
             if marked {
                 let mut test = TaggedTest {
                     name: f.sig.ident.to_string(),
+                    line: f.sig.ident.span().start().line,
                     tags: Vec::new(),
                     ignored: f.attrs.iter().any(|a| is(a, &["ignore"])),
                 };

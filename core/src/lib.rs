@@ -12,12 +12,17 @@ const KINDS: [&str; 5] = [
 const FIELDS: [&str; 4] = ["must", "why", "kind", "status"];
 
 pub struct Obligation {
+    /// What follows `A<n> — ` in its heading.
+    pub title: String,
+    /// The 1-based line of its heading.
+    pub line: usize,
     /// A retired obligation keeps its number and needs no test.
     pub retired: bool,
 }
 
 struct Block<'a> {
     id: u32,
+    title: &'a str,
     line: usize,
     fields: BTreeMap<&'a str, &'a str>,
 }
@@ -58,9 +63,10 @@ pub fn obligations(readme: &str, file: &str) -> Result<BTreeMap<u32, Obligation>
         if let Some(rest) = line.strip_prefix("### ") {
             finish(block.take(), &mut found, &mut problems);
             match heading(rest) {
-                Some(id) => {
+                Some((id, title)) => {
                     block = Some(Block {
                         id,
+                        title,
                         line: n,
                         fields: BTreeMap::new(),
                     })
@@ -95,13 +101,13 @@ pub fn obligations(readme: &str, file: &str) -> Result<BTreeMap<u32, Obligation>
     Ok(found)
 }
 
-/// The number in `A<n> — <title>`, the part of a heading after `### `.
-fn heading(rest: &str) -> Option<u32> {
+/// The number and title in `A<n> — <title>`, the part of a heading after `### `.
+fn heading(rest: &str) -> Option<(u32, &str)> {
     let (num, title) = rest.strip_prefix('A')?.split_once(' ')?;
-    title
+    let title = title
         .strip_prefix("— ")
         .or_else(|| title.strip_prefix("- "))?;
-    num.parse().ok()
+    Some((num.parse().ok()?, title))
 }
 
 /// The name and value of a `- **name:** value` line.
@@ -114,7 +120,13 @@ fn finish(
     found: &mut BTreeMap<u32, Obligation>,
     problems: &mut Vec<(usize, String)>,
 ) {
-    let Some(Block { id, line, fields }) = block else {
+    let Some(Block {
+        id,
+        title,
+        line,
+        fields,
+    }) = block
+    else {
         return;
     };
     if !fields.contains_key("must") {
@@ -137,7 +149,13 @@ fn finish(
             false
         }
     };
-    if found.insert(id, Obligation { retired }).is_some() {
+    let title = title.to_string();
+    let obligation = Obligation {
+        title,
+        line,
+        retired,
+    };
+    if found.insert(id, obligation).is_some() {
         problems.push((line, format!("A{id} is declared twice")));
     }
 }

@@ -104,13 +104,13 @@ dependencies = [
 
 [[package]]
 name = "cargo-impish"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "anyhow",
  "archunit",
  "clap",
  "impish 0.7.0",
- "impish-core 0.7.1",
+ "impish-core 0.7.2",
  "proc-macro2",
  "syn 3.0.9",
  "tempfile",
@@ -402,9 +402,9 @@ dependencies = [
 
 [[package]]
 name = "impish"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
- "impish-core 0.7.1",
+ "impish-core 0.7.2",
  "proc-macro2",
  "quote",
  "syn 3.0.9",
@@ -418,7 +418,7 @@ checksum = "dca404895a83d90b2ca9612e67b62eca2280a8f60b599a4c02ab13366fbe0038"
 
 [[package]]
 name = "impish-core"
-version = "0.7.1"
+version = "0.7.2"
 
 [[package]]
 name = "indexmap"

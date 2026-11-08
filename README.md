@@ -107,7 +107,7 @@ $ cargo impish check
 ```
 
 `check` is the only command. It reads the READMEs and parses the test files;
-it never builds or runs anything, and writes nothing. Run it from anywhere in
+it never builds or runs anything, and writes nothing in your project. Run it from anywhere in
 the project: it uses the nearest `contract/` above.
 
 ## When it fails
@@ -196,6 +196,15 @@ jobs:
       - run: cargo test
       - run: cargo impish check
 ```
+
+In GitHub Actions, `check` needs no setup to show its result on the run:
+
+- it appends a job summary: the verdict, a table of primitives, every problem
+  with where it is and how to fix it, and each primitive's obligations with
+  the tests that prove them, folded away;
+- it annotates each problem on its line, so it shows in the PR's diff.
+
+Outside GitHub Actions it prints only what's above.
 
 impish checks that each promise has a test, not that the test is any good.
 For that, run [cargo-mutants](https://mutants.rs) on the lines a PR changes,
