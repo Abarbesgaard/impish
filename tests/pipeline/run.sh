@@ -444,8 +444,21 @@ kill_matrix_keeps_a_test_whose_last_mutant_only_it_catches() {
   expect_exit $rc 0 "$out" && expect_has "$out" "Keep contract/check::t: it alone catches 1 mutant(s):" || return
   args=$(cat "$work/bin/cargo.args")
   expect_has "$args" "mutants --workspace" &&
+    expect_has "$args" "--cargo-test-arg=--no-tests=pass" &&
     expect_has "$args" "--test contract -E binary_id(*::contract) & test(=check::t)" &&
     expect_has "$args" "-E not (binary_id(*::contract) & test(=check::t))" && ok
+}
+
+# A shard of crates without tests runs no tests in its baseline, so the
+# tests come from the mutants' logs.
+kill_matrix_counts_kills_when_the_baseline_ran_no_tests() {
+  repo kmbase
+  printf 'fn spec() {}\n' > tests/contract/add.rs
+  cp "$root/scripts/kill-matrix.sh" scripts/
+  fake_mutants
+  local out rc
+  out=$(PATH="$work/bin:$PATH" KILLMX_OUT="$work/kmbase-out" "$sh" scripts/kill-matrix.sh 'core/src/**' 2>&1); rc=$?
+  expect_exit $rc 0 "$out" && expect_has "$out" "1 caught mutant(s), killed by 1 of 2 test(s)." && ok
 }
 
 # A crate's own unit tests are its library's binary, or the binary's.
