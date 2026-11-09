@@ -8,11 +8,11 @@ name: CI
 #   Format and Clippy ──┐
 #   Dependency policy ──┤
 #   Workflow security ──┤
-#   Similar code (PRs) ─┼── Mutants (PRs) ─┬─ CI ── Release (main, new version)
-#   Version (PRs) ──────┤                  │
-#   Test ───────────────┘                  │
-#   Portability ───────────────────────────┤
-#   Contract ──────────────────────────────┘
+#   Similar code (PRs) ─┼── Mutants (PRs) ───┬─ CI ── Release (main, new version)
+#   Version (PRs) ──────┼── New tests (PRs) ─┤
+#   Test ───────────────┘                    │
+#   Portability ─────────────────────────────┤
+#   Contract ────────────────────────────────┘
 #
 # Format and Clippy: fmt, clippy, unused dependencies, copy-paste outside Rust
 #                    (jscpd, .jscpd.json), and the pipeline's own scripts
@@ -28,6 +28,8 @@ name: CI
 #                    checks impish's own Contract, as the README's In CI shows.
 # Mutants:           every line the PR changes is mutated by cargo-mutants,
 #                    in four shards; a survivor fails.
+# New tests:         each test the PR adds catches a bug no other test catches
+#                    (scripts/new-tests.sh).
 # Release:           publishes the crates and a GitHub release for a new version.
 on:
   push:
@@ -226,6 +228,37 @@ jobs:
           name: mutants.out-${{ matrix.shard }}
           path: mutants.out
 
+  # A new test must catch a bug no other test catches (rule 26). Mutates the
+  # Rust the PR changes and fails when an added test catches nothing unique. A
+  # Contract test is the spec: when other tests share its kills, those tests
+  # are the duplicates (scripts/new-tests.sh).
+  new-tests:
+    name: New tests
+    needs: [lint, deny, zizmor, test, similar, version]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: mutants
+          save-if: false
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
+        with:
+          tool: cargo-mutants,cargo-nextest
+      - name: Each new test catches a bug of its own
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          KILLMX_JOBS: "2"
+        run: scripts/new-tests.sh "origin/${BASE_REF}" | tee -a "$GITHUB_STEP_SUMMARY"
+
   # The exhale of rule 12: a function this PR adds or edits that looks like
   # another one fails, unless the pair is on the base already or declared in
   # scripts/similar-code.allow.
@@ -301,7 +334,7 @@ jobs:
   # let a failure through; this one fails if anything failed or was cancelled.
   ci:
     name: CI
-    needs: [lint, test, contract, portability, deny, zizmor, mutants, similar, version]
+    needs: [lint, test, contract, portability, deny, zizmor, mutants, new-tests, similar, version]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

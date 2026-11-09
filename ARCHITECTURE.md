@@ -78,6 +78,7 @@ merges itself (rule 27).
 | No unused dependency | CI `lint`, `cargo machete` |
 | No copy-paste in scripts, workflows, Markdown or TOML | CI `lint`, jscpd (`.jscpd.json`) |
 | Every changed line is mutated by cargo-mutants, in four shards, and a survivor fails | CI `mutants` |
+| Each test a PR adds catches a bug no other test catches | CI `new-tests`, `scripts/new-tests.sh` |
 | Tests that catch nothing another test doesn't become issues, one per test | nightly `kill-matrix.yml`, `scripts/kill-matrix.sh` |
 | No new near-duplicate functions | CI `similar`, `scripts/similar-code.sh` |
 | Existing near-duplicates become issues, one per cluster | nightly `similar-backlog.yml`, `scripts/similar-backlog.sh` |

@@ -289,6 +289,86 @@ Similar code: src/lib.rs::j, src/lib.rs::k" ] || { bad "filed the wrong issues" 
   ok
 }
 
+# ── new-tests.sh ───────────────────────────────────────────────────────────
+
+# A PR that changes src/check.rs and adds a Contract test, an architecture
+# test and a plain test; the kill matrix is a stub that prints $VERDICT.
+new_tests_repo() {
+  repo nt
+  cp "$root/scripts/new-tests.sh" scripts/
+  # shellcheck disable=SC2016 # $VERDICT expands when the stub runs
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$VERDICT"\n' > scripts/kill-matrix.sh
+  chmod +x scripts/*.sh
+  echo 'pub fn check() {}' > src/check.rs
+  printf '#[impish::contract("check/A1")]\nfn old_contract() {}\n' > tests/contract/check.rs
+  commit setup
+  git checkout -q -b pr
+  echo 'pub fn other() {}' >> src/check.rs
+  printf '\n#[impish::contract("check/A2")]\nfn new_contract() {}\n' >> tests/contract/check.rs
+  printf '#[test]\nfn layers() {}\n' > tests/architecture.rs
+  commit pr
+}
+
+new_tests_maps_each_test_to_the_code_the_pr_changes() {
+  new_tests_repo
+  # A unit test in a crate's src is not under tests/; its file is code to break.
+  printf '#[test]\nfn proves() {}\n' > core/src/lib.rs && commit unit
+  local out
+  out=$(NEW_TESTS_DRY=1 "$sh" scripts/new-tests.sh main 2>&1)
+  expect_has "$out" "contract/check::new_contract	core/src/lib.rs src/check.rs" &&
+    expect_has "$out" "architecture/layers	core/src/lib.rs src/check.rs" && expect_lacks "$out" "old_" &&
+    expect_lacks "$out" "proves" && ok
+}
+
+# Runs new-tests.sh with the kill matrix answering $1; wants exit $2 and $3 in the output.
+new_tests_verdict() {
+  local out rc
+  out=$(VERDICT="$1" NEW_TESTS_MAX=5 "$sh" scripts/new-tests.sh main 2>/dev/null); rc=$?
+  expect_exit $rc "$2" "$out" && expect_has "$out" "$3"
+}
+
+new_tests_fails_unless_a_test_catches_something_of_its_own() {
+  new_tests_repo
+  new_tests_verdict "Keep x: it alone catches 1 mutant(s):" 0 "catches a bug no other test catches" &&
+    new_tests_verdict "x kills nothing in y: a candidate to delete" 1 "catches no mutant" &&
+    new_tests_verdict "$(printf 'Every kill is shared: x is a candidate to delete.\nShared with: suite/a suite/b')" 1 \
+      "catches nothing these tests don't already catch: suite/a suite/b" &&
+    new_tests_verdict "$(printf 'Every kill is shared: x is a Contract test, so the tests\nShared with: suite/dup')" 1 \
+      "also caught by: suite/dup" &&
+    new_tests_verdict "Keep x: a Contract test whose kills only other Contract tests share." 0 "catches a bug no other test catches" &&
+    new_tests_verdict "garbage" 1 "gave no verdict" && ok
+}
+
+# An architecture test kills nothing by design, so the gate doesn't judge it.
+new_tests_skips_architecture_tests() {
+  new_tests_repo
+  new_tests_verdict "Keep x" 0 "Skipping architecture/layers" && ok
+}
+
+new_tests_fails_past_the_cap() {
+  new_tests_repo
+  local out rc
+  out=$(VERDICT="Keep x" NEW_TESTS_MAX=0 "$sh" scripts/new-tests.sh main 2>/dev/null); rc=$?
+  expect_exit $rc 1 "$out" && expect_has "$out" "Split it" && ok
+}
+
+new_tests_passes_without_new_tests() {
+  repo nt0
+  cp "$root/scripts/new-tests.sh" scripts/ && commit setup
+  git checkout -q -b pr && echo 'pub fn b() {}' >> src/lib.rs && commit pr
+  local out rc
+  out=$("$sh" scripts/new-tests.sh main 2>&1); rc=$?
+  expect_exit $rc 0 "$out" && expect_has "$out" "No tests added" && ok
+}
+
+# The gate as ci.yml runs it: piped to tee, under the workflow's shell.
+new_tests_failure_survives_the_pipe_to_tee() {
+  new_tests_repo
+  local rc
+  VERDICT=garbage "$sh" -eo pipefail -c 'scripts/new-tests.sh main 2>&1 | tee /dev/null' >/dev/null; rc=$?
+  expect_exit $rc 1 "" && ok
+}
+
 # ── kill-matrix.sh ─────────────────────────────────────────────────────────
 
 # A sweep is hours of runner time: nightly, in shards, never on a PR.
@@ -400,7 +480,8 @@ kill_matrix_reads_tests_from_a_nextest_log() {
   ok
 }
 
-cases=$(declare -F | awk '{ print $3 }' | grep -E '^(workflows|scripts|shipped|similar_code|kill_matrix)_')
+cases=$(declare -F | awk '{ print $3 }' | grep -E '^(workflows|scripts|shipped|similar_code|kill_matrix|new_tests)_' |
+  grep -vE '^(new_tests_repo|new_tests_verdict)$')
 passed=0 failed=0
 for case in $cases; do
   case "$case" in *"$only"*) ;; *) continue ;; esac
