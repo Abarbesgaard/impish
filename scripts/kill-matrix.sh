@@ -37,7 +37,10 @@ mkdir -p "$out"
 # Every crate is mutated, and .cargo/mutants.toml runs every test target
 # against each mutant with --no-fail-fast, so each log names every test that
 # caught it.
-mutants() { env -u GITHUB_ACTIONS nice -n 19 cargo mutants --workspace -j "${KILLMX_JOBS:-1}" --no-shuffle --test-tool nextest "$@"; }
+# The baseline tests only the mutated crates, and core and impish have no tests
+# of their own, so a shard of only their mutants would fail it; each mutant
+# still runs the whole workspace (test_workspace in .cargo/mutants.toml).
+mutants() { env -u GITHUB_ACTIONS nice -n 19 cargo mutants --workspace -j "${KILLMX_JOBS:-1}" --no-shuffle --test-tool nextest --cargo-test-arg=--no-tests=pass "$@"; }
 
 # Sets the array `args` to `-f <glob>` for each glob (bash 3.2 has no mapfile).
 globs() { args=(); for g in "$@"; do args+=(-f "$g"); done; }
@@ -85,7 +88,8 @@ collect() {
     [ "$summary" = CaughtMutant ] || continue
     tests_in_log "$dir/$log" FAILED | M="$name" awk '{ print ENVIRON["M"] "\t" $0 }'
   done > "$out/matrix.tsv"
-  tests_in_log "$dir/log/baseline.log" ok | sort -u > "$out/tests.txt"
+  # The baseline may run no tests (see mutants), so every log names the tests.
+  for log in "$dir"/log/*.log; do tests_in_log "$log" ok; tests_in_log "$log" FAILED; done | sort -u > "$out/tests.txt"
 }
 
 # Report over a matrix and a test list. Also writes "<test><TAB>kills" for each
