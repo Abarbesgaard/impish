@@ -2,7 +2,7 @@
 # Tests for the scripts and workflows that make up impish's CI pipeline. A gate
 # that can't fail passes every PR it should stop (Impatient Programming, rule
 # 24), so each case builds a throwaway git repo, fakes the slow tools
-# (similarity-rs, gh) and checks a script's
+# (similarity-rs, cargo-mutants, gh) and checks a script's
 # output and exit code. After Sara's tests/pipeline.
 #
 #   tests/pipeline/run.sh            # every case
@@ -289,7 +289,118 @@ Similar code: src/lib.rs::j, src/lib.rs::k" ] || { bad "filed the wrong issues" 
   ok
 }
 
-cases=$(declare -F | awk '{ print $3 }' | grep -E '^(workflows|scripts|shipped|similar_code)_')
+# ── kill-matrix.sh ─────────────────────────────────────────────────────────
+
+# A sweep is hours of runner time: nightly, in shards, never on a PR.
+workflows_kill_matrix_runs_nightly() {
+  local f="$root/.github/workflows/kill-matrix.yml"
+  grep -q '^  schedule:' "$f" || { bad "kill-matrix.yml runs on no schedule"; return; }
+  ! grep -q 'pull_request' "$f" || { bad "kill-matrix.yml runs on PRs"; return; }
+  grep -qF 'scripts/kill-matrix.sh --merge --file-issues' "$f" || { bad "kill-matrix.yml files no issues"; return; }
+  ok
+}
+
+# m1 is killed by a Contract test and another test, m2 by a third. nextest
+# names a failed test again in its summary, so a kill can be listed twice.
+kill_matrix_report_keeps_contract_tests() {
+  repo km
+  printf '#[impish::contract("add/A1")]\nfn spec() {}\n' > tests/contract/add.rs
+  printf 'm1\tcontract/add::spec\nm1\tsuite/dup\nm2\tsuite/own\nm2\tsuite/own\n' > "$work/matrix.tsv"
+  printf 'contract/add::spec\nsuite/dup\nsuite/own\nsuite/idle\narchitecture/layers\n' > "$work/tests.txt"
+  sed '/^case /,$d' "$root/scripts/kill-matrix.sh" > "$work/km-lib.sh"
+  local out rc suspects
+  # shellcheck disable=SC2016 # expands in the inner shell
+  out=$(KILLMX_OUT="$work/kmout" "$sh" -c 'source "$1"; report "$2" "$3" "$4"' _ \
+        "$work/km-lib.sh" "$work/matrix.tsv" "$work/tests.txt" "$work/suspects.tsv" 2>&1); rc=$?
+  expect_exit $rc 0 "$out" && expect_has "$out" "contract/add::spec   (Contract)" && expect_has "$out" "suite/dup   <- removable" &&
+    expect_lacks "$out" "own   <- removable" && expect_has "$out" "   1    1  suite/own" || return
+  suspects=$(cut -f1 "$work/suspects.tsv" | sort | tr '\n' ' ')
+  [ "$suspects" = "suite/dup suite/idle " ] || { bad "suspects: '$suspects'"; return; }
+  ok
+}
+
+# Shard a alone ties dup and own, so it would keep dup; merged with shard b,
+# own covers both mutants and dup is the one that can go.
+kill_matrix_merges_shards_before_judging() {
+  repo kmmerge
+  printf 'fn spec() {}\n' > tests/contract/add.rs
+  mkdir -p "$work/shard-a" "$work/shard-b"
+  printf 'm1\tsuite/dup\nm1\tsuite/own\n' > "$work/shard-a/matrix.tsv"
+  printf 'm2\tsuite/own\n' > "$work/shard-b/matrix.tsv"
+  printf 'suite/dup\nsuite/own\nsuite/idle\n' | tee "$work/shard-a/tests.txt" > "$work/shard-b/tests.txt"
+  local out rc
+  out=$(KILLMX_OUT="$work/kmmerge-out" "$sh" "$root/scripts/kill-matrix.sh" --merge "$work/shard-a" "$work/shard-b" 2>&1); rc=$?
+  expect_exit $rc 0 "$out" && expect_has "$out" "2 caught mutant(s), killed by 2 of 3 test(s)." &&
+    expect_has "$out" "suite/dup   <- removable" && expect_lacks "$out" "own   <- removable" && ok
+}
+
+# A fake `cargo mutants` for kill-matrix.sh --test: on its own the test kills
+# m1 and m2; without it the suite kills m1 and misses m2, the last mutant.
+fake_mutants() {
+  mkdir -p "$work/bin"
+  cat > "$work/bin/cargo" <<'FAKE'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$(dirname "$0")/cargo.args"
+while [ $# -gt 0 ]; do [ "$1" = --output ] && out="$2"; shift; done
+mkdir -p "$out/mutants.out/log"
+m() { printf '{"scenario":{"Mutant":{"name":"%s"}},"summary":"%s","log_path":"log/%s.log"}' "$1" "$2" "$1"; }
+case "$out" in
+  */one) rest="$(m m1 CaughtMutant),$(m m2 CaughtMutant)" ;;
+  *) rest="$(m m1 CaughtMutant),$(m m2 MissedMutant)"
+     printf '        PASS [   0.010s] (  1/41) cargo-impish::contract check::t\n        FAIL [   0.020s] (  2/41) cargo-impish::suite other\n' > "$out/mutants.out/log/m1.log" ;;
+esac
+printf '{"outcomes":[{"scenario":"Baseline","summary":"Success","log_path":"log/b.log"},%s]}' "$rest" > "$out/mutants.out/outcomes.json"
+FAKE
+  chmod +x "$work/bin/cargo"
+}
+
+kill_matrix_keeps_a_test_whose_last_mutant_only_it_catches() {
+  repo kmlast
+  printf 'fn spec() {}\n' > tests/contract/add.rs
+  cp "$root/scripts/kill-matrix.sh" scripts/
+  fake_mutants
+  local out rc args
+  out=$(PATH="$work/bin:$PATH" KILLMX_OUT="$work/kmlast-out" "$sh" scripts/kill-matrix.sh --test contract/check::t src/lib.rs 2>&1); rc=$?
+  expect_exit $rc 0 "$out" && expect_has "$out" "Keep contract/check::t: it alone catches 1 mutant(s):" || return
+  args=$(cat "$work/bin/cargo.args")
+  expect_has "$args" "mutants --workspace" &&
+    expect_has "$args" "--test contract -E binary_id(*::contract) & test(=check::t)" &&
+    expect_has "$args" "-E not (binary_id(*::contract) & test(=check::t))" && ok
+}
+
+# A crate's own unit tests are its library's binary, or the binary's.
+kill_matrix_finds_unit_tests_in_each_crate() {
+  sed '/^case /,$d' "$root/scripts/kill-matrix.sh" > "$work/km-lib.sh"
+  local got
+  # shellcheck disable=SC2016 # expands in the inner shell
+  got=$("$sh" -c 'source "$1"; for t in impish-core/a::t cargo-impish/b::t; do echo "$(target_args "$t") $(test_filter "$t")"; done' _ "$work/km-lib.sh")
+  expect_has "$got" "-p impish-core --lib binary_id(impish-core) & test(=a::t)" &&
+    expect_has "$got" "--bin cargo-impish binary_id(cargo-impish::bin/cargo-impish) & test(=b::t)" && ok
+}
+
+# Kills and passes come from nextest status lines; a timeout is a kill.
+kill_matrix_reads_tests_from_a_nextest_log() {
+  sed '/^case /,$d' "$root/scripts/kill-matrix.sh" > "$work/km-lib.sh"
+  printf '%s\n' \
+    '    Starting 4 tests across 3 binaries' \
+    '       START [         ] (1/4) cargo-impish::contract check::spec' \
+    '        SLOW [> 60.000s] (3/4) cargo-impish::suite slow' \
+    '        PASS [   0.010s] (1/4) cargo-impish::contract check::spec' \
+    $'\033[31m        FAIL\033[0m [   0.020s] (2/4) impish-core parse::own' \
+    '     TIMEOUT [  60.000s] (3/4) cargo-impish::suite slow' \
+    '        PASS [   0.030s] (4/4) cargo-impish::bin/cargo-impish x::fine' \
+    '     Summary [   0.100s] 4 tests run: 2 passed, 2 failed' > "$work/nx.log"
+  local failed passed
+  # shellcheck disable=SC2016 # expands in the inner shell
+  failed=$("$sh" -c 'source "$1"; tests_in_log "$2" FAILED' _ "$work/km-lib.sh" "$work/nx.log" | sort -u | tr '\n' ' ')
+  # shellcheck disable=SC2016 # expands in the inner shell
+  passed=$("$sh" -c 'source "$1"; tests_in_log "$2" ok' _ "$work/km-lib.sh" "$work/nx.log" | tr '\n' ' ')
+  [ "$failed" = "impish-core/parse::own suite/slow " ] || { bad "failed: '$failed'"; return; }
+  [ "$passed" = "contract/check::spec cargo-impish/x::fine " ] || { bad "passed: '$passed'"; return; }
+  ok
+}
+
+cases=$(declare -F | awk '{ print $3 }' | grep -E '^(workflows|scripts|shipped|similar_code|kill_matrix)_')
 passed=0 failed=0
 for case in $cases; do
   case "$case" in *"$only"*) ;; *) continue ;; esac
